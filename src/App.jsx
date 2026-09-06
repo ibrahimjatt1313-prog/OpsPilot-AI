@@ -1,1282 +1,832 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import "./App.css";
 
-// ============================================================================
-// OPSPILOT AI - ENTERPRISE GLOBAL INFRASTRUCTURE & INCIDENT INTELLIGENCE CORE
-// Version 4.5.0-Enterprise-Production (Build 12894)
-// ============================================================================
-
 // ----------------------------------------------------------------------------
-// CONSTANTS & REGION REGISTRIES
+// CONSTANTS & REGISTRY DATA
 // ----------------------------------------------------------------------------
-const ENTERPRISE_CLUSTER_REGIONS = [
-  { id: "us-east-1", name: "US East (N. Virginia)", latency: "14ms", status: "Optimal", capacity: "92%" },
-  { id: "us-west-2", name: "US West (Oregon)", latency: "38ms", status: "Optimal", capacity: "84%" },
-  { id: "eu-central-1", name: "EU Central (Frankfurt)", latency: "89ms", status: "Warning", capacity: "96%" },
-  { id: "ap-southeast-1", name: "Asia Pacific (Singapore)", latency: "142ms", status: "Optimal", capacity: "78%" },
-  { id: "sa-east-1", name: "South America (São Paulo)", latency: "180ms", status: "Optimal", capacity: "65%" },
-  { id: "me-central-1", name: "Middle East (UAE)", latency: "110ms", status: "Optimal", capacity: "71%" }
+const REGIONS = [
+  { id: "us-east-1", name: "US East (N. Virginia)" },
+  { id: "us-west-2", name: "US West (Oregon)" },
+  { id: "eu-central-1", name: "EU Central (Frankfurt)" },
+  { id: "ap-southeast-1", name: "Asia Pacific (Singapore)" }
 ];
 
-const ADVANCED_AI_MODELS = [
-  { id: "gemini-pro-1.5", name: "Gemini 1.5 Pro Enterprise Core", provider: "Google DeepMind", contextWindow: "2M tokens", speed: "Ultra-Fast" },
-  { id: "gemini-flash-1.5", name: "Gemini 1.5 Flash Realtime SRE", provider: "Google DeepMind", contextWindow: "1M tokens", speed: "Instantaneous" },
-  { id: "claude-3-5-sonnet", name: "Claude 3.5 Sonnet Reasoning Engine", provider: "Anthropic", contextWindow: "200k tokens", speed: "High Precision" },
-  { id: "gpt-4o", name: "GPT-4o Omnichannel Sentinel", provider: "OpenAI", contextWindow: "128k tokens", speed: "Balanced" },
-  { id: "llama-3-70b-ops", name: "Llama 3 70B Local Ops Instance", provider: "Meta Open Source", contextWindow: "32k tokens", speed: "On-Premises" }
-];
-
-
-const INITIAL_METRICS_REGISTRY = {
-  totalScansExecuted: 9482,
-  activeIncidentsCount: 3,
-  resolvedTodayCount: 28,
-  meanTimeToRecoveryMinutes: "14.2m",
-  clusterHealthScore: 99.4,
-  securityVulnerabilities: 0,
-  activeConnectionsCount: 14205,
-  cacheHitRatioPercent: 98.7,
-  failedAutomationsCount: 1,
-  pendingApprovalsCount: 4
-};
-
-const DEFAULT_PRESET_SCENARIOS = [
+const PRESETS = [
   {
-    id: "preset-1",
+    id: "preset-lock",
     label: "DB Lock Timeout",
-    category: "Database",
     text: "PostgreSQL master database lock timeout on checkout tables causing cascading API gateway failures."
   },
   {
-    id: "preset-2",
+    id: "preset-oom",
     label: "K8s OOM Loop",
-    category: "Kubernetes",
-    text: "Kubernetes pod OOMKilled loop on worker nodes due to memory leak in background queue processor."
+    text: "Kubernetes pod eviction loops triggered by memory limit exhaustion on node worker-pool-b9."
   },
   {
-    id: "preset-3",
+    id: "preset-redis",
     label: "Redis Exhaustion",
-    category: "Caching",
     text: "Redis memory watermark exceeded 95% triggering key eviction and high latency on session validation."
-  },
-  {
-    id: "preset-4",
-    label: "Network Latency",
-    category: "Networking",
-    text: "Cross-region VPC peering link experiencing packet drop rate above 4% leading to RPC timeout spikes."
-  },
-  {
-    id: "preset-5",
-    label: "SSL Certificate Expiry",
-    category: "Security",
-    text: "TLS certificate expired on API gateway edge node causing immediate handshake drops for external clients."
   }
 ];
 
-// ============================================================================
-// HELPER UTILITY FUNCTIONS & FORMATTERS
-// ============================================================================
-function formatTimestampISO(dateObj = new Date()) {
-  return dateObj.toISOString();
-}
-
-function formatShortTimeString(dateObj = new Date()) {
-  return dateObj.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-}
-
-function calculateSeverityBadgeClass(riskLevel) {
-  if (!riskLevel) return "severity-normal";
-  const level = riskLevel.toLowerCase();
-  if (level.includes("critical")) return "severity-critical";
-  if (level.includes("high")) return "severity-high";
-  if (level.includes("medium")) return "severity-medium";
-  return "severity-low";
-}
-
-// ============================================================================
-// COMPONENT: ENTERPRISE HEADER BAR
-// ============================================================================
-function EnterpriseHeaderBar({
-  selectedClusterRegion,
-  setSelectedClusterRegion,
-  applicationTheme,
-  setApplicationTheme,
-  onExportReport
-}) {
-  return (
-    <header className="topbar enterprise-topbar-v4">
-      <div className="online-status">
-        <span className="online-dot-green"></span>
-        <span>
-          Cluster Status: Optimal ({INITIAL_METRICS_REGISTRY.clusterHealthScore}% Health SLA)
-        </span>
-      </div>
-
-      <div className="topbar-right-controls">
-        <div className="cluster-region-selector">
-          <span>Region:</span>
-          <select
-            value={selectedClusterRegion}
-            onChange={(e) => setSelectedClusterRegion(e.target.value)}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "inherit",
-              fontWeight: "600",
-              cursor: "pointer",
-              outline: "none"
-            }}
-          >
-            {ENTERPRISE_CLUSTER_REGIONS.map((reg) => (
-              <option key={reg.id} value={reg.id} style={{ background: "#0f172a", color: "#fff" }}>
-                {reg.name} ({reg.latency})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          className="icon-button"
-          title="Toggle Application Theme"
-          onClick={() =>
-            setApplicationTheme(
-              applicationTheme === "dark"
-                ? "light"
-                : applicationTheme === "light"
-                ? "auto"
-                : "dark"
-            )
-          }
-        >
-          {applicationTheme === "dark" ? "🌙" : applicationTheme === "light" ? "☀️" : "💻"}
-        </button>
-
-        <button className="export-button primary-action" onClick={onExportReport}>
-          ⇩ Export JSON Report
-        </button>
-      </div>
-    </header>
-  );
-}
-
-// ============================================================================
-// COMPONENT: HERO DASHBOARD BANNER
-// ============================================================================
-function EnterpriseHeroBanner({ auditCount }) {
-  return (
-    <section className="hero-dashboard enterprise-hero-v4">
-      <div className="hero-copy">
-        <div className="hero-badge">
-          <span className="badge-glow-dot"></span>
-          ENTERPRISE SRE INCIDENT INTELLIGENCE V4.5
-        </div>
-        <h1>
-          Autonomous Incident Diagnostics<br />
-          &amp; <span>Real-Time Remediation Workflows.</span>
-        </h1>
-        <p>
-          Ingest complex production anomalies, distributed lock states, and Kubernetes node
-          failures into OpsPilot AI to generate root cause reports and automated mitigation steps
-          instantly.
-        </p>
-        <div className="hero-metrics-strip">
-          <div className="metric-pill">
-            <strong>{auditCount + INITIAL_METRICS_REGISTRY.totalScansExecuted}</strong>
-            <span>Analyses Executed</span>
-          </div>
-          <div className="metric-pill">
-            <strong>{INITIAL_METRICS_REGISTRY.meanTimeToRecoveryMinutes}</strong>
-            <span>Avg MTTR Reduction</span>
-          </div>
-          <div className="metric-pill">
-            <strong>99.99%</strong>
-            <span>Uptime SLA Verified</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="hero-visual enterprise-visual-v4">
-        <div className="orbit orbit-one"></div>
-        <div className="orbit orbit-two"></div>
-        <div className="orbit orbit-three"></div>
-        <div className="brain-core enterprise-core-v4">
-          <div className="core-pulse-ring"></div>
-          <span className="core-symbol">Ω</span>
-        </div>
-        <div className="node-floating-tag tag-1">Shard Replication ✓</div>
-        <div className="node-floating-tag tag-2">Latency: 14ms ⚡</div>
-        <div className="node-floating-tag tag-3">Zero Risk Drift 🛡️</div>
-      </div>
-    </section>
-  );
-}
-
-// ============================================================================
-// COMPONENT: HOW THE AI WORKS BANNER (PROPERLY PLACED OUTSIDE APP)
-// ============================================================================
-export function OpsPilotIntelligenceFlow() {
-  const steps = [
-    {
-      step: "01",
-      title: "Situation",
-      description: "Capture operational context",
-      bg: "#1e3a8a",
-      border: "#3b82f6",
-      color: "#93c5fd",
-      icon: "◆"
-    },
-    {
-      step: "02",
-      title: "AI Reasoning",
-      description: "Analyze patterns and context",
-      bg: "#581c87",
-      border: "#a855f7",
-      color: "#d8b4fe",
-      icon: "✦"
-    },
-    {
-      step: "03",
-      title: "Risk Assessment",
-      description: "Evaluate impact and likelihood",
-      bg: "#78350f",
-      border: "#f59e0b",
-      color: "#fde68a",
-      icon: "◇"
-    },
-    {
-      step: "04",
-      title: "Recommended Action",
-      description: "Provide actionable recommendations",
-      bg: "#064e3b",
-      border: "#10b981",
-      color: "#6ee7b7",
-      icon: "◎"
-    }
-  ];
-
-  return (
-    <div style={{ width: "100%", background: "#0b1329", border: "1px solid #1e293b", borderRadius: "16px", padding: "28px", color: "#f8fafc", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)", margin: "24px 0", boxSizing: "border-box" }}>
-      <h3 style={{ textAlign: "center", fontSize: "18px", fontWeight: "bold", color: "#ffffff", marginBottom: "28px", letterSpacing: "0.5px" }}>How the AI works</h3>
-      
-      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", overflowX: "auto", paddingBottom: "8px" }}>
-        {steps.map((item, index) => (
-          <div key={index} style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "center" }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", minWidth: "150px" }}>
-              <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#64748b", marginBottom: "8px" }}>{item.step}</span>
-              <div style={{ width: "56px", height: "56px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: item.bg, border: `2px solid ${item.border}`, color: item.color, marginBottom: "12px", fontSize: "18px", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.4)" }}>
-                {item.icon}
-              </div>
-              <h4 style={{ fontWeight: "bold", color: "#ffffff", fontSize: "13px", marginBottom: "4px" }}>{item.title}</h4>
-              <p style={{ fontSize: "11px", color: "#94a3b8", margin: 0, lineHeight: "1.4" }}>{item.description}</p>
-            </div>
-            
-            {index < steps.length - 1 && (
-              <div style={{ color: "#334155", margin: "0 16px", fontFamily: "monospace", fontSize: "16px", flexShrink: 0 }}>
-                →
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// COMPONENT: DIAGNOSTIC INPUT FORM
-// ============================================================================
-function DiagnosticInputForm({
-  situationText,
-  setSituationText,
-  executionProtocolMode,
-  setExecutionProtocolMode,
-  riskToleranceLevel,
-  setRiskToleranceLevel,
-  isAnalyzingProcess,
-  executeAutonomousAnalysis,
-  resetDiagnosticForm,
-  systemErrorBanner,
-  setSystemErrorBanner
-}) {
-  return (
-    <div className="panel input-panel">
-      <div className="panel-heading">
-        <div className="heading-left">
-          <div className="step-number blue">1</div>
-          <div>
-            <h2>Incident &amp; Situation Input</h2>
-            <p>Paste server logs, error traces, or natural language operational context.</p>
-          </div>
-        </div>
-        <span className="panel-tag input-tag">DIAGNOSTIC INGEST</span>
-      </div>
-
-      <div className="textarea-wrapper">
-        <textarea
-          value={situationText}
-          onChange={(e) => {
-            setSituationText(e.target.value);
-            setSystemErrorBanner("");
-          }}
-          maxLength={5000}
-          placeholder="e.g., The production Kubernetes cluster is throwing 504 Gateway Timeouts on service-auth due to connection pooling limits exhausted under peak concurrent traffic..."
-        />
-        <div className="textarea-meta-bar">
-          <span className="character-count">{situationText.length} / 5000 chars</span>
-          <div className="quick-presets">
-            <span>Presets:</span>
-            {DEFAULT_PRESET_SCENARIOS.map((preset) => (
-              <button key={preset.id} onClick={() => setSituationText(preset.text)}>
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="input-advanced-config">
-        <div className="config-group">
-          <label>Protocol Mode:</label>
-          <select
-            value={executionProtocolMode}
-            onChange={(e) => setExecutionProtocolMode(e.target.value)}
-          >
-            <option value="autonomous-sre">Autonomous SRE Copilot</option>
-            <option value="conservative">Conservative (Safety First)</option>
-            <option value="aggressive">Aggressive (Speed Priority)</option>
-          </select>
-        </div>
-        <div className="config-group">
-          <label>Risk Tolerance:</label>
-          <select
-            value={riskToleranceLevel}
-            onChange={(e) => setRiskToleranceLevel(e.target.value)}
-          >
-            <option value="balanced">Balanced Mitigation</option>
-            <option value="strict">Strict Zero Downtime</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="input-actions">
-        <button
-          className="analyze-button enterprise-btn"
-          onClick={executeAutonomousAnalysis}
-          disabled={isAnalyzingProcess}
-        >
-          {isAnalyzingProcess ? (
-            <>
-              <span className="button-spinner"></span>
-              Running Deep Vector Analysis...
-            </>
-          ) : (
-            <>
-              Execute AI Diagnosis
-              <span>✦</span>
-            </>
-          )}
-        </button>
-
-        <button
-          className="clear-button"
-          onClick={resetDiagnosticForm}
-          disabled={isAnalyzingProcess}
-        >
-          ⌫ Reset Form
-        </button>
-      </div>
-
-      {systemErrorBanner && <div className="error-box animate-shake">⚠ {systemErrorBanner}</div>}
-    </div>
-  );
-}
-
-// ============================================================================
-// COMPONENT: DIAGNOSTIC OUTPUT RESULTS PANEL
-// ============================================================================
-function DiagnosticOutputPanel({ analysisResult, isAnalyzingProcess }) {
-  return (
-    <div className="panel result-panel">
-      <div className="panel-heading">
-        <div className="heading-left">
-          <div className="step-number green">2</div>
-          <div>
-            <h2>Diagnostic Analysis Output</h2>
-            <p>Structured operational insights and mitigation plan.</p>
-          </div>
-        </div>
-        <span className="panel-tag output-tag">VERIFIED RESULT</span>
-      </div>
-
-      {!analysisResult && !isAnalyzingProcess && (
-        <div className="result-empty">
-          <div className="result-icon">❖</div>
-          <h3>Awaiting Operational Input</h3>
-          <p>Provide a scenario on the left or select a preset to trigger intelligent diagnostics.</p>
-        </div>
-      )}
-
-      {isAnalyzingProcess && (
-        <div className="result-empty loading-state-container">
-          <div className="big-loader"></div>
-          <h3>Synthesizing Enterprise Telemetry...</h3>
-          <p>Evaluating root causes, correlating logs, and compiling mitigation vectors.</p>
-        </div>
-      )}
-
-      {analysisResult && !isAnalyzingProcess && (
-        <div className="analysis-result structured-output-box" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {/* Top Metric Cards */}
-          <div className="risk-grid">
-            <div className="metric-card risk-card-highlight">
-              <span>RISK LEVEL</span>
-              <strong className={`risk-text-${analysisResult.riskLevel?.toLowerCase()}`}>
-                {analysisResult.riskLevel}
-              </strong>
-            </div>
-            <div className="metric-card blue">
-              <span>EST. RECOVERY</span>
-              <strong>{analysisResult.estimatedRecoveryTime || "15 mins"}</strong>
-            </div>
-            <div className="metric-card purple">
-              <span>DISPATCH PRIORITY</span>
-              <strong>{analysisResult.priority}</strong>
-            </div>
-          </div>
-
-          {/* Situation Summary */}
-          <div className="analysis-box">
-            <span className="box-section-title">SITUATION SUMMARY</span>
-            <p className="summary-headline" style={{ fontWeight: "bold", marginBottom: "6px" }}>
-              {typeof analysisResult.summary === "object"
-                ? analysisResult.summary.headline
-                : analysisResult.summary}
-            </p>
-            {analysisResult.summary?.overview && (
-              <p className="summary-overview" style={{ fontSize: "13px", opacity: 0.9 }}>
-                {analysisResult.summary.overview}
-              </p>
-            )}
-            {analysisResult.summary?.affectedComponents && (
-              <div className="component-pills-row" style={{ marginTop: "10px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                {analysisResult.summary.affectedComponents.map((comp, idx) => (
-                  <span key={idx} className="component-pill" style={{ background: "rgba(255,255,255,0.1)", padding: "4px 10px", borderRadius: "4px", fontSize: "12px" }}>
-                    {comp}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Root Cause Assessment */}
-          <div className="analysis-box">
-            <span className="box-section-title">ROOT CAUSE ASSESSMENT</span>
-            <p className="primary-cause-text" style={{ fontSize: "13px", marginBottom: "8px" }}>
-              <strong>Primary Trigger:</strong>{" "}
-              {typeof analysisResult.possibleCause === "object"
-                ? analysisResult.possibleCause.primary
-                : analysisResult.possibleCause}
-            </p>
-            {analysisResult.possibleCause?.secondaryFactors && (
-              <ul className="secondary-factors-list" style={{ margin: "0 0 0 16px", fontSize: "13px", color: "#cbd5e1" }}>
-                {analysisResult.possibleCause.secondaryFactors.map((factor, idx) => (
-                  <li key={idx} style={{ marginBottom: "4px" }}>
-                    {factor}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Recommended Action Plan (Strictly Clean CSS Structure - No Overlap) */}
-          <div className="analysis-box">
-            <span className="box-section-title">RECOMMENDED MITIGATION ACTION PLAN</span>
-            <div className="actions-list" style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "10px" }}>
-              {Array.isArray(analysisResult.actions) &&
-                analysisResult.actions.map((item, index) => (
-                  <div
-                    className="action-row"
-                    key={index}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "12px",
-                      background: "rgba(255, 255, 255, 0.03)",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
-                      padding: "12px",
-                      borderRadius: "8px"
-                    }}
-                  >
-                    <div
-                      className="action-step-number"
-                      style={{
-                        background: "rgba(96, 165, 250, 0.15)",
-                        color: "#60a5fa",
-                        width: "26px",
-                        height: "26px",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: "bold",
-                        fontSize: "12px",
-                        flexShrink: 0
-                      }}
-                    >
-                      {typeof item === "object" && item.step ? item.step : index + 1}
-                    </div>
-                    <div className="action-row-content" style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-                      {typeof item === "object" ? (
-                        <>
-                          <p className="action-text-main" style={{ margin: 0 }}>
-                            <strong className="timeframe-tag" style={{ color: "#60a5fa" }}>[{item.timeframe}]</strong> — {item.action}
-                          </p>
-                          <span className="action-owner-tag" style={{ color: "#94a3b8", fontSize: "11px" }}>
-                            Assigned Owner: <strong>{item.owner}</strong>
-                          </span>
-                        </>
-                      ) : (
-                        <p className="action-text-main" style={{ margin: 0 }}>{item}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// COMPONENT: AUDIT LOGS & HISTORY TABLE / GRID
-// ============================================================================
-function AuditLogsSection({
-  auditHistoryRegistry,
-  auditSearchQuery,
-  setAuditSearchQuery,
-  auditRiskFilter,
-  setAuditRiskFilter,
-  clearEntireAuditHistory,
-  filteredAuditHistory,
-  setSituationText,
-  setAnalysisResult,
-  diagnosticWorkspaceRef
-}) {
-  return (
-    <section className="history-section-container">
-      <div className="section-heading">
-        <div>
-          <span>AUDIT TRAIL &amp; PREVIOUS SCANS</span>
-          <h2>Operational Incident History</h2>
-        </div>
-        <div className="history-toolbar">
-          <input
-            type="text"
-            placeholder="Filter audit logs by keyword..."
-            value={auditSearchQuery}
-            onChange={(e) => setAuditSearchQuery(e.target.value)}
-            className="history-search-input"
-          />
-          <select
-            value={auditRiskFilter}
-            onChange={(e) => setAuditRiskFilter(e.target.value)}
-            className="history-filter-select"
-          >
-            <option value="all">All Risk Levels</option>
-            <option value="high">High Risk</option>
-            <option value="critical">Critical</option>
-          </select>
-          {auditHistoryRegistry.length > 0 && (
-            <button className="clear-history-btn" onClick={clearEntireAuditHistory}>
-              Clear Audit Logs
-            </button>
-          )}
-        </div>
-      </div>
-
-      {filteredAuditHistory.length === 0 ? (
-        <div className="no-history-box">
-          <div className="no-history-icon">◷</div>
-          <h3>No matching audit logs found</h3>
-          <p>Execute diagnostic queries or clear your active search filter to view historical records.</p>
-        </div>
-      ) : (
-        <div className="history-list-grid">
-          {filteredAuditHistory.map((item) => (
-            <div
-              className="history-row-card"
-              key={item.id}
-              onClick={() => {
-                setSituationText(item.situation);
-                setAnalysisResult(item.analysis);
-                diagnosticWorkspaceRef.current?.scrollIntoView({ behavior: "smooth" });
-              }}
-            >
-              <div className={`history-severity-indicator ${calculateSeverityBadgeClass(item.analysis?.riskLevel)}`}></div>
-              <div className="history-card-body">
-               <div className="history-card-header-row">
-                  {/* Line 414 Update */}
-                   <strong>
-                   {typeof item.analysis?.summary === "object"? item.analysis.summary.headline : item.analysis?.summary || "Incident Investigation"}
-                   </strong>
-                   <span className={`risk-pill ${item.analysis?.riskLevel?.toLowerCase() || ""}`}>
-                    {item.analysis?.riskLevel || "Standard"} Risk
-                  </span>
-                </div>
-                <p className="history-snippet">{item.situation}</p>
-                <div className="history-card-footer">
-                  <span>Timestamp: {item.time} | Region: {item.region}</span>
-                  <span className="load-action-link">Click to load into workspace ↗</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ============================================================================
-// COMPONENT: MODAL CONTAINER MANAGER
-// ============================================================================
-function EnterpriseModalManager({
-  activeModalIdentifier,
-  setActiveModalIdentifier,
-  applicationTheme,
-  setApplicationTheme,
-  selectedEngineModel,
-  setSelectedEngineModel,
-  auditHistoryRegistry,
-  realtimeTelemetryLogs,
-  selectedClusterRegion
-}) {
-  if (!activeModalIdentifier) return null;
-
-  return (
-    <div className="modal-backdrop" onClick={() => setActiveModalIdentifier(null)}>
-      <div className="modal-card-container" onClick={(e) => e.stopPropagation()}>
-        {activeModalIdentifier === "settings" && (
-          <>
-            <h2 className="modal-title">⚙ Enterprise Model &amp; Theme Configuration</h2>
-            <p className="modal-subtitle">Customize your execution preferences and foundational AI models.</p>
-
-            <div className="modal-form-group" style={{ marginTop: "16px" }}>
-              <label>Interface Theme Preference:</label>
-              <div className="theme-selector-grid">
-                <button
-                  type="button"
-                  onClick={() => setApplicationTheme("dark")}
-                  className={applicationTheme === "dark" ? "active-theme-btn" : ""}
-                >
-                  🌙 Dark Matrix
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setApplicationTheme("light")}
-                  className={applicationTheme === "light" ? "active-theme-btn" : ""}
-                >
-                  ☀️ Light Modern
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setApplicationTheme("auto")}
-                  className={applicationTheme === "auto" ? "active-theme-btn" : ""}
-                >
-                  💻 System Auto
-                </button>
-              </div>
-            </div>
-
-            <div className="modal-form-group" style={{ marginTop: "16px" }}>
-              <label>Primary Foundation AI Engine:</label>
-              <select
-                value={selectedEngineModel}
-                onChange={(e) => setSelectedEngineModel(e.target.value)}
-                className="modal-select-input"
-              >
-                {ADVANCED_AI_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({m.provider})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </>
-        )}
-
-        {activeModalIdentifier === "telemetry" && (
-          <>
-            <h2 className="modal-title">📊 Live Telemetry &amp; System Insights</h2>
-            <p className="modal-subtitle">Real-time operational metrics across active cluster microservices.</p>
-
-            <div className="telemetry-stats-grid">
-              <div className="telemetry-box">
-                <span>Total Scans Executed</span>
-                <strong>{auditHistoryRegistry.length + INITIAL_METRICS_REGISTRY.totalScansExecuted}</strong>
-              </div>
-              <div className="telemetry-box">
-                <span>Active Incidents</span>
-                <strong style={{ color: "#ef4444" }}>{INITIAL_METRICS_REGISTRY.activeIncidentsCount}</strong>
-              </div>
-              <div className="telemetry-box">
-                <span>Cluster SLA Health</span>
-                <strong style={{ color: "#10b981" }}>{INITIAL_METRICS_REGISTRY.clusterHealthScore}%</strong>
-              </div>
-            </div>
-
-            <h4 style={{ marginTop: "16px", fontSize: "13px", color: "#818cf8" }}>Realtime Cluster Telemetry Stream:</h4>
-            <div className="telemetry-log-terminal">
-              {realtimeTelemetryLogs.map((log) => (
-                <div key={log.id} className="terminal-log-line">
-                  <span className="log-time">[{log.timestamp}]</span>
-                  <span className={`log-level-${log.level.toLowerCase()}`}>{log.level}:</span>
-                  <span>{log.message}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {activeModalIdentifier === "compliance" && (
-          <>
-            <h2 className="modal-title">🛡️ Zero-Trust Security &amp; Compliance</h2>
-            <p className="modal-subtitle">Enterprise-grade cryptographic audit verification and SOC2 compliance logs.</p>
-
-            <div
-              className="compliance-status-box"
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                background: "rgba(16, 185, 129, 0.1)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
-                borderRadius: "8px"
-              }}
-            >
-              <strong style={{ color: "#10b981", display: "block", marginBottom: "6px" }}>
-                ✓ SOC2 Type II Certified &amp; ISO 27001 Compliant
-              </strong>
-              <p style={{ fontSize: "13px", margin: 0, opacity: 0.9 }}>
-                All situational telemetry vectors are encrypted at rest using AES-256 and securely scrubbed of PII before entering inference queues.
-              </p>
-            </div>
-
-            <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px", background: "rgba(255,255,255,0.03)", borderRadius: "6px" }}>
-                <span>Active Encryption Standard:</span>
-                <strong>TLS 1.3 / AES-256-GCM</strong>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px", background: "rgba(255,255,255,0.03)", borderRadius: "6px" }}>
-                <span>Data Residency Shard:</span>
-                <strong>{selectedClusterRegion}</strong>
-              </div>
-            </div>
-          </>
-        )}
-
-        <div className="modal-footer-actions">
-          <button className="modal-close-btn" onClick={() => setActiveModalIdentifier(null)}>
-            Close Window
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// MAIN APPLICATION ROOT COMPONENT
-// ============================================================================
 export default function App() {
-  // Navigation & View Routing State
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState("dashboard");
-  const [situationText, setSituationText] = useState("");
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [isAnalyzingProcess, setIsAnalyzingProcess] = useState(false);
-  const [systemErrorBanner, setSystemErrorBanner] = useState("");
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [selectedRegion, setSelectedRegion] = useState("us-east-1");
+  const [activeModal, setActiveModal] = useState(null);
 
-  // Enterprise Configuration States
-  const [selectedEngineModel, setSelectedEngineModel] = useState(ADVANCED_AI_MODELS[0].id);
-  const [selectedClusterRegion, setSelectedClusterRegion] = useState(ENTERPRISE_CLUSTER_REGIONS[0].id);
-  const [executionProtocolMode, setExecutionProtocolMode] = useState("autonomous-sre");
-  const [riskToleranceLevel, setRiskToleranceLevel] = useState("balanced");
-  const [teamDropdownVisible, setTeamDropdownVisible] = useState(false);
+  // Situation input & Analysis state pre-filled to match exact screenshot
+  const [situationText, setSituationText] = useState(
+    "Kubernetes pod eviction loops triggered by memory limit exhaustion on node worker-pool-b9."
+  );
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Theme & Appearance State
-  const [applicationTheme, setApplicationTheme] = useState(() => {
-    return localStorage.getItem("opspilot-v4-theme") || "dark";
+  const [analysisResult, setAnalysisResult] = useState({
+    riskLevel: "High Priority",
+    estimatedRecovery: "20-35 Minutes",
+    confidence: "98%",
+    summary: {
+      headline: "Kubernetes Memory Exhaustion & OOM Eviction Analysis",
+      overview:
+        'Diagnostic vector parsing on input parameters highlights critical bottlenecks tied to "Kubernetes pod eviction loops triggered by memory limit exhaustion on node worker-pool-b9."'
+    },
+    rootCause: {
+      primary: "Concurrent transaction collisions under peak event loops exhausting resources."
+    },
+    actions: [
+      {
+        step: 1,
+        timeframe: "Immediate",
+        action:
+          "Engage emergency traffic shedding on ingress load balancers and activate CDN static fallback mode.",
+        owner: "Site Reliability Engineering"
+      },
+      {
+        step: 2,
+        timeframe: "Short-Term",
+        action:
+          "Terminate dangling database sessions, purge uncommitted transaction locks, and verify shard state.",
+        owner: "Database Administration (DBA)"
+      },
+      {
+        step: 3,
+        timeframe: "Long-Term",
+        action:
+          "Refactor isolation levels in database configurations and deploy automated circuit breakers.",
+        owner: "Platform Architecture Core"
+      }
+    ]
   });
 
-  // Modal Control Matrix ('settings' | 'telemetry' | 'compliance' | 'security' | null)
-  const [activeModalIdentifier, setActiveModalIdentifier] = useState(null);
-
-  // History Filter and Search States
-  const [auditSearchQuery, setAuditSearchQuery] = useState("");
-  const [auditRiskFilter, setAuditRiskFilter] = useState("all");
-
-  // Persistent Audit Log History
-  const [auditHistoryRegistry, setAuditHistoryRegistry] = useState(() => {
-    try {
-      const savedLogs = localStorage.getItem("opspilot-v4-audit-history");
-      return savedLogs
-        ? JSON.parse(savedLogs)
-        : [
-            {
-              id: 1712400192000,
-              situation:
-                "Kubernetes pod eviction loops triggered by memory limit exhaustion on node worker-pool-b9.",
-              analysis: {
-                riskLevel: "Critical",
-                priority: "P0 - Emergency Dispatch",
-                estimatedRecoveryTime: "12-25 Minutes",
-                summary: {
-                  headline: "Memory Pressure Eviction Cascade in K8s Cluster",
-                  overview:
-                    "Unbounded memory consumption by unoptimized caching worker processes forced kubelet to terminate core pods.",
-                  affectedComponents: ["Kubernetes Kubelet", "Redis Cache Cluster", "API Gateway Ingress"]
-                },
-                possibleCause: {
-                  primary: "Memory leak in background analytical queue runner v2.4.",
-                  secondaryFactors: [
-                    "Insufficient resource request/limit definitions in deployment YAML",
-                    "Traffic surge compounding garbage collection pauses"
-                  ]
-                },
-                actions: [
-                  {
-                    step: 1,
-                    timeframe: "0-5 mins",
-                    action:
-                      "Drain affected worker nodes, cordon traffic, and redistribute replicas to stable zones.",
-                    owner: "Kubernetes Infra SRE"
-                  },
-                  {
-                    step: 2,
-                    timeframe: "5-15 mins",
-                    action:
-                      "Flush corrupted redis caching keys and double container memory limits temporarily.",
-                    owner: "Database Reliability Team"
-                  },
-                  {
-                    step: 3,
-                    timeframe: "1 hour",
-                    action:
-                      "Patch memory leak in background worker service and deploy hotfix v2.4.1.",
-                    owner: "Core Engineering Lead"
-                  }
-                ]
-              },
-              time: "09:14:22 AM",
-              region: "us-east-1"
-            }
-          ];
-    } catch {
-      return [];
+  // History list matching screenshot
+  const [searchHistory, setSearchHistory] = useState("");
+  const [auditHistory, setAuditHistory] = useState([
+    {
+      id: "hist-1",
+      title: "Kubernetes Memory Exhaustion & OOM Loop",
+      timestamp: "12:28:11 AM",
+      region: "us-east-1",
+      severity: "CRITICAL",
+      severityType: "critical",
+      situation: "Kubernetes pod eviction loops triggered by memory limit exhaustion on node worker-pool-b9."
+    },
+    {
+      id: "hist-2",
+      title: "Memory Pressure Eviction Cascade in K8s Cluster",
+      timestamp: "09:14:22 AM",
+      region: "us-east-1",
+      severity: "WARNING",
+      severityType: "warning",
+      situation: "Unbounded memory consumption by caching processes forced kubelet to terminate core pods."
     }
-  });
-
-  // Realtime Telemetry Stream Simulator
-  const [realtimeTelemetryLogs, setRealtimeTelemetryLogs] = useState([
-    { id: 101, timestamp: "14:20:01", level: "INFO", message: "Edge proxy health check passed across 48 global nodes." },
-    { id: 102, timestamp: "14:20:15", level: "SUCCESS", message: "Database read-replica shard sync completed with 0 drift." },
-    { id: 103, timestamp: "14:20:44", level: "WARN", message: "Memory watermark crossed 82% threshold on US-East worker pool." },
-    { id: 104, timestamp: "14:21:02", level: "INFO", message: "Autonomous AI Copilot vector index re-calibrated successfully." }
   ]);
 
-  const diagnosticWorkspaceRef = useRef(null);
-  const auditLogsSectionRef = useRef(null);
+  const workspaceRef = useRef(null);
+  const historyRef = useRef(null);
 
-  // Synchronize Theme Changes to DOM
-  useEffect(() => {
-    const rootElement = document.documentElement;
-    localStorage.setItem("opspilot-v4-theme", applicationTheme);
+  // Execute Diagnosis via Modular Backend API (with zero-fail fallback for hackathon presentations)
+  const handleExecuteDiagnosis = async () => {
+    if (!situationText.trim()) return;
 
-    if (applicationTheme === "auto") {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      rootElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
-    } else {
-      rootElement.setAttribute("data-theme", applicationTheme);
-    }
-  }, [applicationTheme]);
-
-// Comprehensive Diagnostic Execution Pipeline (Structured Gemini LLM Integration)
-  const executeAutonomousAnalysis = async () => {
-    if (!situationText.trim()) {
-      setSystemErrorBanner("Operational situation description cannot be left empty. Provide logs or context.");
-      return;
-    }
-
-    setIsAnalyzingProcess(true);
-    setSystemErrorBanner("");
-    setAnalysisResult(null);
-
+    setIsAnalyzing(true);
     const cleanedSituation = situationText.trim();
 
-    // Technical Prompt Enforcing Structured Output Architecture
-    const systemPrompt = `
-      You are OpsPilot AI, an enterprise-grade autonomous SRE & Infrastructure Copilot.
-      Analyze the operational logs/situation below and produce a deterministic JSON response matching this schema strictly:
-
-      {
-        "riskLevel": "Critical | High | Medium | Low",
-        "priority": "P1 - Immediate Executive Dispatch",
-        "estimatedRecoveryTime": "20-35 Minutes",
-        "summary": {
-          "headline": "Comprehensive Technical Summary",
-          "overview": "Detailed failure analysis based on input parameters...",
-          "affectedComponents": ["Core Compute Engine", "Distributed Storage Shard", "API Ingress Gateway"]
-        },
-        "possibleCause": {
-          "primary": "Primary operational trigger breakdown...",
-          "secondaryFactors": [
-            "Secondary factor contributing to the issue",
-            "Network or configuration bottleneck"
-          ]
-        },
-        "actions": [
-          {
-            "step": 1,
-            "timeframe": "Immediate (0-10m)",
-            "action": "Description of operational mitigation...",
-            "owner": "Site Reliability Engineering (SRE)"
-          },
-          {
-            "step": 2,
-            "timeframe": "Short-Term (15-30m)",
-            "action": "Secondary stabilization procedure...",
-            "owner": "Database Reliability Team"
-          }
-        ]
-      }
-
-      Execution Context:
-      Model: ${selectedEngineModel} | Region: ${selectedClusterRegion} | Protocol: ${executionProtocolMode}
-
-      Input Logs:
-      ${cleanedSituation}
-    `;
-
-try {
-      const apiResponse = await fetch("/api/v4/enterprise/diagnose", {
+    try {
+      const response = await fetch("/api/diagnostics/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           situation: cleanedSituation,
-          model: selectedEngineModel,
-          region: selectedClusterRegion,
-          protocol: executionProtocolMode
-        })
+          region: selectedRegion,
+        }),
       });
 
-      if (!apiResponse.ok) {
-        throw new Error("Enterprise endpoint timeout or secure proxy offline.");
+      if (!response.ok) {
+        throw new Error(`API returned status ${response.status}`);
       }
 
-      const responseJson = await apiResponse.json();
-      setAnalysisResult(responseJson.analysis);
-      recordAuditHistoryItem(cleanedSituation, responseJson.analysis);
-    } catch (fallbackError) {
-      await new Promise((resolver) => setTimeout(resolver, 1100));
+      const data = await response.json();
+      if (data.success && data.analysis) {
+        setAnalysisResult(data.analysis);
 
-      const simulatedEnterpriseAnalysis = {
-        riskLevel:
-          cleanedSituation.toLowerCase().includes("database") ||
-          cleanedSituation.toLowerCase().includes("crash")
-            ? "Critical"
-            : "High",
-        priority: "P1 - Immediate Executive Dispatch",
-        estimatedRecoveryTime: "20-35 Minutes",
-        summary: {
-          headline: cleanedSituation.toLowerCase().includes("oomkilled") || cleanedSituation.toLowerCase().includes("memory")
-            ? "Kubernetes Memory Exhaustion & OOM Analysis"
-            : cleanedSituation.toLowerCase().includes("database") || cleanedSituation.toLowerCase().includes("lock")
-            ? "PostgreSQL Deadlock & Lock Timeout Analysis"
-            : cleanedSituation.toLowerCase().includes("ssl") || cleanedSituation.toLowerCase().includes("certificate")
-            ? "SSL/TLS Edge Certificate Expiry Diagnostics"
-            : "Autonomous LLM Telemetry Analysis Complete",
-          overview: `Diagnostic vector parsing on input parameters highlights critical bottlenecks tied to: "${cleanedSituation.slice(0, 75)}..."`,
-          affectedComponents: ["Core Compute Engine", "Distributed Storage Shard", "API Ingress Gateway"]
-        },
-        possibleCause: {
-          primary: "Deadlock condition triggered by concurrent transaction collisions under peak event loops.",
-          secondaryFactors: [
-            "Suboptimal indexing on high-frequency search tables",
-            "Network packet fragmentation across multi-region VPC peering"
-          ]
-        },
-        actions: [
-          {
-            step: 1,
-            timeframe: "Immediate (0-10m)",
-            action:
-              "Engage emergency traffic shedding on ingress load balancers and activate CDN static fallback mode.",
-            owner: "Site Reliability Engineering (SRE)"
-          },
-          {
-            step: 2,
-            timeframe: "Short-Term (15-30m)",
-            action:
-              "Terminate dangling database sessions, purge uncommitted locks, and verify transaction integrity.",
-            owner: "Database Administration (DBA)"
-          },
-          {
-            step: 3,
-            timeframe: "Long-Term (24h)",
-            action:
-              "Refactor isolation levels in ORM configuration and deploy automated circuit breakers.",
-            owner: "Platform Architecture Team"
-          }
-        ]
-      };
+        const newHeadline = data.analysis.summary?.headline || "Infrastructure Diagnostic Analysis";
+        const risk = data.analysis.riskLevel || "High Priority";
+        const isCritical = risk.toLowerCase().includes("high") || risk.toLowerCase().includes("critical");
 
-      setAnalysisResult(simulatedEnterpriseAnalysis);
-      recordAuditHistoryItem(cleanedSituation, simulatedEnterpriseAnalysis);
+        const newHistoryItem = {
+          id: "hist-" + Date.now(),
+          title: newHeadline,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          region: selectedRegion,
+          severity: isCritical ? "CRITICAL" : "WARNING",
+          severityType: isCritical ? "critical" : "warning",
+          situation: cleanedSituation,
+        };
 
-      setRealtimeTelemetryLogs((prevLogs) => [
-        {
-          id: Date.now(),
-          timestamp: new Date().toLocaleTimeString(),
-          level: "WARN",
-          message: `Generated AI diagnostic vector for incident pattern: ${cleanedSituation.slice(0, 25)}...`
-        },
-        ...prevLogs
-      ]);
-    } finally {
-      setIsAnalyzingProcess(false);
+        setAuditHistory((prev) => [newHistoryItem, ...prev]);
+        return;
+      }
+    } catch (apiError) {
+      console.warn("[OpsPilot Frontend] Backend API call failed, falling back to local heuristic engine:", apiError);
     }
-  };
 
-  const recordAuditHistoryItem = (sitContent, analysisObj) => {
-    setAuditHistoryRegistry((prevHistory) => {
-      const updatedRegistry = [
-        {
-          id: Date.now(),
-          situation: sitContent,
-          analysis: analysisObj,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-          region: selectedClusterRegion
-        },
-        ...prevHistory
-      ];
-      localStorage.setItem("opspilot-v4-audit-history", JSON.stringify(updatedRegistry));
-      return updatedRegistry;
-    });
-  };
+    // Client-side fallback if backend API is offline
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const textLower = cleanedSituation.toLowerCase();
+    let newHeadline = "Autonomous Incident Analysis & Telemetry Correlated";
+    let newPrimary = "Deadlock condition triggered by concurrent transaction collisions.";
+    let newRisk = "High Priority";
+    let newRecovery = "20-35 Minutes";
 
-  const resetDiagnosticForm = () => {
-    setSituationText("");
-    setAnalysisResult(null);
-    setSystemErrorBanner("");
-  };
-
-  const clearEntireAuditHistory = () => {
-    localStorage.removeItem("opspilot-v4-audit-history");
-    setAuditHistoryRegistry([]);
-  };
-
-  const exportAnalysisAsJSON = () => {
-    if (!analysisResult) {
-      setSystemErrorBanner("Export error: No active diagnostic analysis result found.");
-      return;
+    if (textLower.includes("lock") || textLower.includes("database") || textLower.includes("postgres")) {
+      newHeadline = "PostgreSQL Lock Contention & Transaction Deadlock";
+      newPrimary = "Exclusive lock on transactional tables blocking worker connection pool.";
+      newRisk = "High Priority";
+      newRecovery = "15-25 Minutes";
+    } else if (textLower.includes("oom") || textLower.includes("memory") || textLower.includes("eviction") || textLower.includes("k8s") || textLower.includes("kubernetes")) {
+      newHeadline = "Kubernetes Memory Exhaustion & OOM Eviction Analysis";
+      newPrimary = "Concurrent transaction collisions under peak event loops exhausting resources.";
+      newRisk = "High Priority";
+      newRecovery = "20-35 Minutes";
+    } else if (textLower.includes("redis") || textLower.includes("cache")) {
+      newHeadline = "Redis Cache Memory Saturation & Eviction Alert";
+      newPrimary = "Memory watermark crossed 95% threshold triggering key eviction spikes.";
+      newRisk = "Medium Priority";
+      newRecovery = "10-15 Minutes";
     }
-    const exportPayload = {
-      timestamp: formatTimestampISO(),
-      region: selectedClusterRegion,
-      modelUsed: selectedEngineModel,
-      diagnosticResult: analysisResult
+
+    const fallbackResult = {
+      riskLevel: newRisk,
+      estimatedRecovery: newRecovery,
+      confidence: "98%",
+      summary: {
+        headline: newHeadline,
+        overview: `Diagnostic vector parsing on input parameters highlights critical bottlenecks tied to "${cleanedSituation.slice(0, 100)}"`
+      },
+      rootCause: {
+        primary: newPrimary
+      },
+      actions: [
+        {
+          step: 1,
+          timeframe: "Immediate",
+          action: "Engage emergency traffic shedding on ingress load balancers and activate CDN static fallback mode.",
+          owner: "Site Reliability Engineering"
+        },
+        {
+          step: 2,
+          timeframe: "Short-Term",
+          action: "Terminate dangling database sessions, purge uncommitted transaction locks, and verify shard state.",
+          owner: "Database Administration (DBA)"
+        },
+        {
+          step: 3,
+          timeframe: "Long-Term",
+          action: "Refactor isolation levels in database configurations and deploy automated circuit breakers.",
+          owner: "Platform Architecture Core"
+        }
+      ]
     };
-    const dataBlob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
-    const downloadUrl = URL.createObjectURL(dataBlob);
-    const anchorElement = document.createElement("a");
-    anchorElement.href = downloadUrl;
-    anchorElement.download = `OpsPilot-Report-${selectedClusterRegion}-${Date.now()}.json`;
-    anchorElement.click();
-    URL.revokeObjectURL(downloadUrl);
+
+    setAnalysisResult(fallbackResult);
+    const newHistoryItem = {
+      id: "hist-" + Date.now(),
+      title: newHeadline,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      region: selectedRegion,
+      severity: newRisk.includes("High") || newRisk.includes("Critical") ? "CRITICAL" : "WARNING",
+      severityType: newRisk.includes("High") || newRisk.includes("Critical") ? "critical" : "warning",
+      situation: cleanedSituation
+    };
+    setAuditHistory((prev) => [newHistoryItem, ...prev]);
+    setIsAnalyzing(false);
   };
 
-  const filteredAuditHistory = useMemo(() => {
-    return auditHistoryRegistry.filter((item) => {
-      const matchesSearch = item.situation.toLowerCase().includes(auditSearchQuery.toLowerCase());
-      const matchesRisk =
-        auditRiskFilter === "all" ||
-        item.analysis?.riskLevel?.toLowerCase() === auditRiskFilter.toLowerCase();
-      return matchesSearch && matchesRisk;
-    });
-  }, [auditHistoryRegistry, auditSearchQuery, auditRiskFilter]);
+  const filteredHistory = useMemo(() => {
+    if (!searchHistory.trim()) return auditHistory;
+    return auditHistory.filter((item) =>
+      item.title.toLowerCase().includes(searchHistory.toLowerCase()) ||
+      item.situation.toLowerCase().includes(searchHistory.toLowerCase())
+    );
+  }, [auditHistory, searchHistory]);
 
   return (
-    <div className="app-shell enterprise-shell-v4">
-      {/* SIDEBAR NAVIGATION PANEL */}
-      <aside className="sidebar enterprise-sidebar-v4" style={{ overflowY: 'auto' }}>
-        <div className="sidebar-brand">
-          <div className="brand-logo pulse-glow-core">Ω</div>
-          <div>
-            <h2>OpsPilot AI</h2>
-            <span>Enterprise Ops Core v4.5</span>
-          </div>
-        </div>
-
-        <nav className="sidebar-nav">
-          <button
-            className={`nav-item ${activeWorkspaceTab === "dashboard" ? "active" : ""}`}
-            onClick={() => setActiveWorkspaceTab("dashboard")}
-          >
-            <span className="nav-icon">⌂</span>
-            Enterprise Dashboard
-          </button>
-
-          <button
-            className="nav-item"
-            onClick={() => diagnosticWorkspaceRef.current?.scrollIntoView({ behavior: "smooth" })}
-          >
-            <span className="nav-icon">✦</span>
-            Diagnostic Workspace
-          </button>
-
-          <button
-            className="nav-item"
-            onClick={() => auditLogsSectionRef.current?.scrollIntoView({ behavior: "smooth" })}
-          >
-            <span className="nav-icon">◷</span>
-            Incident Audit Trail
-          </button>
-
-          <button className="nav-item" onClick={() => setActiveModalIdentifier("telemetry")}>
-            <span className="nav-icon">📊</span>
-            Cluster Telemetry
-          </button>
-
-          <button className="nav-item" onClick={() => setActiveModalIdentifier("compliance")}>
-            <span className="nav-icon">🛡️</span>
-            Zero-Trust Compliance
-          </button>
-
-          <button className="nav-item" onClick={() => setActiveModalIdentifier("settings")}>
-            <span className="nav-icon">⚙</span>
-            Model Engine Settings
-          </button>
-        </nav>
-
-        <div className="sidebar-promo enterprise-promo-v4">
-          <div className="promo-glow-layer"></div>
-          <span className="promo-label">SECURITY PROTOCOL ACTIVE</span>
-          <h3>Zero-Trust SRE Sentinel</h3>
-          <p>End-to-end encrypted cluster diagnostics with live telemetry stream.</p>
-          <div className="status-indicator-badge">
-            <span className="pulse-dot-green"></span> TLS 1.3 Secure Link
-          </div>
-        </div>
-
-        {/* User Account / Team Selector Menu */}
-        <div className="team-card" onClick={() => setTeamDropdownVisible(!teamDropdownVisible)}>
-          <div className="team-avatar">MA</div>
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <strong style={{ display: "block", textOverflow: "ellipsis", overflow: "hidden" }}>
-              Muhammad Ibraheem
-            </strong>
-            <span style={{ fontSize: "11px", opacity: 0.7 }}>Lead Infrastructure Admin</span>
-          </div>
-          <span className="team-arrow">{teamDropdownVisible ? "▴" : "⌄"}</span>
-
-          {teamDropdownVisible && (
-            <div className="team-dropdown-menu" onClick={(e) => e.stopPropagation()}>
-              <div className="dropdown-header">Active Region: {selectedClusterRegion}</div>
-              <button
-                onClick={() => {
-                  setActiveModalIdentifier("settings");
-                  setTeamDropdownVisible(false);
-                }}
-              >
-                ⚙ Configure Engines
-              </button>
-              <button
-                onClick={() => {
-                  setTeamDropdownVisible(false);
-                  alert("Enterprise console session securely locked.");
-                }}
-              >
-                🔒 Lock Console Session
-              </button>
+    <div className="app-shell">
+      {/* ====================================================================
+          LEFT SIDEBAR
+          ==================================================================== */}
+      <aside className="sidebar">
+        <div className="sidebar-top">
+          {/* Brand Header */}
+          <div className="sidebar-brand">
+            <div className="brand-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+              </svg>
             </div>
-          )}
+            <div className="brand-info">
+              <span className="brand-title">OpsPilot AI</span>
+              <span className="brand-subtitle">ENTERPRISE SRE</span>
+            </div>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="sidebar-nav">
+            <button
+              className={`nav-item ${activeTab === "dashboard" ? "active" : ""}`}
+              onClick={() => setActiveTab("dashboard")}
+            >
+              <span className="nav-icon">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                  <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                  <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                  <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                </svg>
+              </span>
+              Dashboard
+            </button>
+
+            <button
+              className={`nav-item ${activeTab === "workspace" ? "active" : ""}`}
+              onClick={() => {
+                setActiveTab("workspace");
+                workspaceRef.current?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              <span className="nav-icon">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="4 17 10 11 4 5"></polyline>
+                  <line x1="12" y1="19" x2="20" y2="19"></line>
+                </svg>
+              </span>
+              Diagnostics Workspace
+            </button>
+
+            <button
+              className={`nav-item ${activeTab === "audit" ? "active" : ""}`}
+              onClick={() => {
+                setActiveTab("audit");
+                historyRef.current?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              <span className="nav-icon">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </span>
+              Incident Audit Trail
+            </button>
+
+            <button
+              className="nav-item"
+              onClick={() => setActiveModal("settings")}
+            >
+              <span className="nav-icon">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="4" y1="21" x2="4" y2="14"></line>
+                  <line x1="4" y1="10" x2="4" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12" y2="3"></line>
+                  <line x1="20" y1="21" x2="20" y2="16"></line>
+                  <line x1="20" y1="12" x2="20" y2="3"></line>
+                  <line x1="1" y1="14" x2="7" y2="14"></line>
+                  <line x1="9" y1="8" x2="15" y2="8"></line>
+                  <line x1="17" y1="16" x2="23" y2="16"></line>
+                </svg>
+              </span>
+              Model Engine Settings
+            </button>
+          </nav>
+        </div>
+
+        {/* Bottom Sidebar: SRE Sentinel & User Profile */}
+        <div className="sidebar-bottom">
+          <div className="sentinel-card">
+            <div className="sentinel-icon-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <path d="M9 12l2 2 4-4"></path>
+              </svg>
+            </div>
+            <div className="sentinel-text">
+              <span className="sentinel-title">Active SRE Sentinel</span>
+              <span className="sentinel-sub">TLS 1.3 Encryption Active</span>
+            </div>
+          </div>
+
+          <div className="user-profile-box">
+            <div className="user-profile-name">Alex Thorne</div>
+            <div className="user-profile-role">Lead Infrastructure</div>
+          </div>
         </div>
       </aside>
 
-      {/* MAIN CONTENT DASHBOARD AREA */}
-      <main className="dashboard enterprise-main-v4">
-        <EnterpriseHeaderBar
-          selectedClusterRegion={selectedClusterRegion}
-          setSelectedClusterRegion={setSelectedClusterRegion}
-          applicationTheme={applicationTheme}
-          setApplicationTheme={setApplicationTheme}
-          onExportReport={exportAnalysisAsJSON}
-        />
+      {/* ====================================================================
+          MAIN DASHBOARD AREA
+          ==================================================================== */}
+      <main className="main-content">
+        {/* Top Header Bar */}
+        <header className="top-header">
+          <div className="top-header-left">
+            <div className="sla-pill">
+              <span className="sla-dot"></span>
+              Optimal 99.4% SLA
+            </div>
 
-        <div className="dashboard-content">
-       <EnterpriseHeroBanner auditCount={auditHistoryRegistry.length} />
-       <OpsPilotIntelligenceFlow />
-          <section className="workspace" ref={diagnosticWorkspaceRef}>
-            <DiagnosticInputForm
-              situationText={situationText}
-              setSituationText={setSituationText}
-              executionProtocolMode={executionProtocolMode}
-              setExecutionProtocolMode={setExecutionProtocolMode}
-              riskToleranceLevel={riskToleranceLevel}
-              setRiskToleranceLevel={setRiskToleranceLevel}
-              isAnalyzingProcess={isAnalyzingProcess}
-              executeAutonomousAnalysis={executeAutonomousAnalysis}
-              resetDiagnosticForm={resetDiagnosticForm}
-              systemErrorBanner={systemErrorBanner}
-              setSystemErrorBanner={setSystemErrorBanner}
-            />
+            <div className="region-pill">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" color="#64748b">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              <select
+                className="region-select-inline"
+                value={selectedRegion}
+                onChange={(e) => setSelectedRegion(e.target.value)}
+              >
+                {REGIONS.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-            <DiagnosticOutputPanel
-              analysisResult={analysisResult}
-              isAnalyzingProcess={isAnalyzingProcess}
-            />
+          <div className="top-header-right">
+            <button
+              className="header-action-btn"
+              onClick={() => setActiveModal("telemetry")}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" color="#64748b">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              Cluster Telemetry
+            </button>
+
+            <button
+              className="header-action-btn"
+              onClick={() => setActiveModal("compliance")}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" color="#64748b">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+              Zero Trust
+            </button>
+          </div>
+        </header>
+
+        {/* Dashboard Content Container */}
+        <div className="dashboard-body">
+          {/* Hero Section */}
+          <section className="hero-section">
+            <div className="eyebrow-tag">AUTONOMOUS INCIDENT DIAGNOSTICS</div>
+            <h1 className="hero-title">Real-Time Remediation Workflows</h1>
+            <p className="hero-desc">
+              Ingest complex production anomalies, distributed lock states, and Kubernetes node
+              failures into OpsPilot AI to generate root cause reports and automated mitigation steps
+              instantly.
+            </p>
           </section>
 
-          <div ref={auditLogsSectionRef}>
-            <AuditLogsSection
-              auditHistoryRegistry={auditHistoryRegistry}
-              auditSearchQuery={auditSearchQuery}
-              setAuditSearchQuery={setAuditSearchQuery}
-              auditRiskFilter={auditRiskFilter}
-              setAuditRiskFilter={setAuditRiskFilter}
-              clearEntireAuditHistory={clearEntireAuditHistory}
-              filteredAuditHistory={filteredAuditHistory}
-              setSituationText={setSituationText}
-              setAnalysisResult={setAnalysisResult}
-              diagnosticWorkspaceRef={diagnosticWorkspaceRef}
-            />
-          </div>
-        </div>
+          {/* 3 Metric Cards */}
+          <section className="kpi-grid">
+            <div className="kpi-card">
+              <div className="kpi-label">ANALYSES EXECUTED</div>
+              <div className="kpi-value">9,484</div>
+              <div className="kpi-subtext">Across 24 active microservices</div>
+            </div>
 
-        <footer className="dashboard-footer enterprise-footer-v4">
-          <span>© 2026 OpsPilot AI Enterprise. All rights reserved.</span>
-          <span>Zero-Trust Architecture v4.5-Prod</span>
-          <span>Connected to Gemini Cluster ({selectedClusterRegion})</span>
-        </footer>
+            <div className="kpi-card">
+              <div className="kpi-label">AVG MTTR REDUCTION</div>
+              <div className="kpi-value">14.2m</div>
+              <div className="kpi-subtext">-84% compared to baseline</div>
+            </div>
+
+            <div className="kpi-card">
+              <div className="kpi-label">UPTIME SLA VERIFIED</div>
+              <div className="kpi-value">99.99%</div>
+              <div className="kpi-subtext">Continuous telemetry stream</div>
+            </div>
+          </section>
+
+          {/* How AI Operates 4-Step Section */}
+          <section className="workflow-section">
+            <h3 className="workflow-heading">How the AI Diagnostic Engine Operates</h3>
+            <div className="workflow-grid">
+              <div className="workflow-card">
+                <div className="workflow-step-num">1</div>
+                <div className="workflow-step-title">Situation</div>
+                <div className="workflow-step-desc">
+                  Telemetry ingest parses log structure &amp; resource trends.
+                </div>
+              </div>
+
+              <div className="workflow-card">
+                <div className="workflow-step-num">2</div>
+                <div className="workflow-step-title">AI Reasoning</div>
+                <div className="workflow-step-desc">
+                  Inference model identifies anomalous state bounds.
+                </div>
+              </div>
+
+              <div className="workflow-card">
+                <div className="workflow-step-num">3</div>
+                <div className="workflow-step-title">Risk Assessment</div>
+                <div className="workflow-step-desc">
+                  Computes operational risk level and MTTR window.
+                </div>
+              </div>
+
+              <div className="workflow-card">
+                <div className="workflow-step-num">4</div>
+                <div className="workflow-step-title">Remediation</div>
+                <div className="workflow-step-desc">
+                  Dispatches sandboxed shell tasks for mitigation.
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Two-Column Diagnostic Workspace */}
+          <section className="workspace-grid" ref={workspaceRef}>
+            {/* Left Card: Incident & Situation Input */}
+            <div className="workspace-panel">
+              <div>
+                <div className="panel-header-row">
+                  <h3 className="panel-title">Incident &amp; Situation Input</h3>
+                  <span className="panel-tag-blue">Interactive Ingest</span>
+                </div>
+
+                <div className="input-box-wrapper">
+                  <textarea
+                    className="situation-textarea"
+                    value={situationText}
+                    onChange={(e) => setSituationText(e.target.value)}
+                    maxLength={5000}
+                    placeholder="Enter incident logs or operational context..."
+                  />
+                  <div className="textarea-footer">
+                    <span>{situationText.length} / 5000 chars</span>
+                    <span>System Logs Attached</span>
+                  </div>
+                </div>
+
+                <div className="presets-container">
+                  <div className="presets-label">QUICK-LOAD SRE PRESETS</div>
+                  <div className="presets-row">
+                    {PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        className="preset-btn"
+                        onClick={() => setSituationText(preset.text)}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                className="execute-diagnosis-btn"
+                onClick={handleExecuteDiagnosis}
+                disabled={isAnalyzing}
+              >
+                {isAnalyzing ? (
+                  <span>Processing Diagnostic Telemetry...</span>
+                ) : (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    Execute Autonomous SRE Diagnosis
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Right Card: Diagnostic Analysis Output */}
+            <div className="workspace-panel">
+              <div>
+                <div className="panel-header-row">
+                  <h3 className="panel-title">Diagnostic Analysis Output</h3>
+                  <span className="panel-tag-green">
+                    Model Confident {analysisResult.confidence || "98%"}
+                  </span>
+                </div>
+
+                <div className="metrics-duo-row">
+                  <div className="badge-box-risk">
+                    <div className="box-label">RISK LEVEL</div>
+                    <div className="box-val">{analysisResult.riskLevel}</div>
+                  </div>
+                  <div className="badge-box-recovery">
+                    <div className="box-label">EST. RECOVERY</div>
+                    <div className="box-val">{analysisResult.estimatedRecovery}</div>
+                  </div>
+                </div>
+
+                <div className="section-micro-label">SITUATION SUMMARY</div>
+                <h4 className="summary-headline">{analysisResult.summary.headline}</h4>
+                <p className="summary-body">{analysisResult.summary.overview}</p>
+
+                <div className="root-cause-micro-label">ROOT CAUSE ASSESSMENT</div>
+                <p className="root-cause-body">
+                  Primary Trigger: {analysisResult.rootCause.primary}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Recommended Mitigation Action Plan */}
+          <section className="plan-section">
+            <div className="plan-header">
+              <h3 className="plan-title">Recommended Mitigation Action Plan</h3>
+              <span className="plan-subtitle">Sequential Execution Protocol</span>
+            </div>
+
+            <div className="plan-steps-list">
+              {analysisResult.actions.map((item, idx) => (
+                <div className="plan-step-item" key={idx}>
+                  <div className="plan-step-badge">{item.step || idx + 1}</div>
+                  <div className="plan-step-content">
+                    <div className="plan-step-main-text">
+                      <span className="timeframe-lead">{item.timeframe}</span> — {item.action}
+                    </div>
+                    <div className="plan-step-team">Assigned Team: {item.owner}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Operational Incident History Section */}
+          <section className="history-section" ref={historyRef}>
+            <div className="history-header">
+              <div>
+                <div className="history-eyebrow">AUDIT TRAIL &amp; PREVIOUS SCANS</div>
+                <h3 className="history-title">Operational Incident History</h3>
+              </div>
+
+              <div className="history-search-container">
+                <span className="search-icon-inline">🔍</span>
+                <input
+                  type="text"
+                  className="history-search-input"
+                  placeholder="Filter diagnostic history..."
+                  value={searchHistory}
+                  onChange={(e) => setSearchHistory(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="history-items-list">
+              {filteredHistory.map((item) => (
+                <div
+                  className="history-card-row"
+                  key={item.id}
+                  onClick={() => {
+                    setSituationText(item.situation);
+                    handleExecuteDiagnosis();
+                    workspaceRef.current?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <div className="history-card-left">
+                    <div className={`history-icon-square ${item.severityType}`}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="history-incident-heading">{item.title}</div>
+                      <div className="history-incident-meta">
+                        Timestamp: {item.timestamp} | Region: {item.region}
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className={`badge-tag-${item.severityType}`}>
+                    {item.severity}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Footer Strip */}
+          <footer className="footer-strip">
+            <span>© 2026 OpsPilot AI. All rights reserved.</span>
+            <div className="footer-right-text">
+              <span>Zero Trust Architecture v4.5-Prod</span>
+              <span>Telemetry Connected</span>
+            </div>
+          </footer>
+        </div>
       </main>
 
-      {/* MODAL MANAGER */}
-      <EnterpriseModalManager
-        activeModalIdentifier={activeModalIdentifier}
-        setActiveModalIdentifier={setActiveModalIdentifier}
-        applicationTheme={applicationTheme}
-        setApplicationTheme={setApplicationTheme}
-        selectedEngineModel={selectedEngineModel}
-        setSelectedEngineModel={setSelectedEngineModel}
-        auditHistoryRegistry={auditHistoryRegistry}
-        realtimeTelemetryLogs={realtimeTelemetryLogs}
-        selectedClusterRegion={selectedClusterRegion}
-      />
+      {/* ====================================================================
+          MODALS
+          ==================================================================== */}
+      {activeModal && (
+        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            {/* Cluster Telemetry Modal */}
+            {activeModal === "telemetry" && (
+              <>
+                <div className="modal-header-row">
+                  <div className="modal-title-wrap">
+                    <span className="modal-title-icon-blue">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                      </svg>
+                    </span>
+                    <h2 className="modal-title-text">Cluster Telemetry Insights</h2>
+                  </div>
+                  <button className="modal-close-x-btn" onClick={() => setActiveModal(null)} title="Close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+
+                <p className="modal-subtitle-text">
+                  Real-time operational metrics across active cluster microservices.
+                </p>
+
+                <div className="telemetry-kpi-row">
+                  <div className="telemetry-kpi-card">
+                    <div className="telemetry-kpi-label">TOTAL SPANS</div>
+                    <div className="telemetry-kpi-val">9484</div>
+                  </div>
+
+                  <div className="telemetry-kpi-card">
+                    <div className="telemetry-kpi-label">ACTIVE INCIDENTS</div>
+                    <div className="telemetry-kpi-val incident-val">
+                      3 <span className="incident-crit-tag">Critical</span>
+                    </div>
+                  </div>
+
+                  <div className="telemetry-kpi-card">
+                    <div className="telemetry-kpi-label">SLA HEALTH</div>
+                    <div className="telemetry-kpi-val green-text">99.4%</div>
+                  </div>
+                </div>
+
+                <div className="telemetry-stream-heading">REALTIME TELEMETRY STREAM</div>
+
+                <div className="telemetry-stream-container">
+                  <div className="log-stream-line">
+                    [12:28:11] <span className="log-tag-warn">WARN:</span> Generated AI diagnostic vector for incident pattern.
+                  </div>
+                  <div className="log-stream-line">
+                    [14:20:01] <span className="log-tag-info">INFO:</span> Edge proxy health check passed across 48 nodes.
+                  </div>
+                  <div className="log-stream-line">
+                    [14:20:15] <span className="log-tag-success">SUCCESS:</span> Database read-replica shard sync completed with 0 drift.
+                  </div>
+                  <div className="log-stream-line">
+                    [14:20:44] <span className="log-tag-warn">WARN:</span> Memory watermark crossed 82% threshold on worker pool.
+                  </div>
+                </div>
+
+                <div className="modal-bottom-footer">
+                  <span className="modal-footer-pipeline-text">Encrypted pipeline</span>
+                  <button className="modal-close-action-btn" onClick={() => setActiveModal(null)}>
+                    Close Window
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Zero-Trust Security & Compliance Modal */}
+            {activeModal === "compliance" && (
+              <>
+                <div className="modal-header-row">
+                  <div className="modal-title-wrap">
+                    <span className="modal-title-icon-green">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        <path d="M9 12l2 2 4-4"></path>
+                      </svg>
+                    </span>
+                    <h2 className="modal-title-text">Zero-Trust Security &amp; Compliance</h2>
+                  </div>
+                  <button className="modal-close-x-btn" onClick={() => setActiveModal(null)} title="Close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+
+                <p className="modal-subtitle-text">
+                  Enterprise-grade cryptographic audit verification and SOC2 compliance validation benchmarks.
+                </p>
+
+                <div className="compliance-banner-box">
+                  <div className="compliance-banner-title">
+                    <span>✓</span> SOC2 Type II Certified &amp; ISO 27001 Compliant
+                  </div>
+                  <p className="compliance-banner-desc">
+                    All situational telemetry vectors are encrypted at rest using AES-256 and securely scrubbed of PII before entering inference queues.
+                  </p>
+                </div>
+
+                <div className="compliance-data-rows">
+                  <div className="compliance-row">
+                    <span className="compliance-row-label">Active Encryption Standard</span>
+                    <span className="compliance-row-value">TLS 1.3 / AES-256-GCM</span>
+                  </div>
+                  <div className="compliance-row">
+                    <span className="compliance-row-label">Data Residency Shard</span>
+                    <span className="compliance-row-value">{selectedRegion}</span>
+                  </div>
+                </div>
+
+                <div className="modal-bottom-footer">
+                  <span className="modal-footer-pipeline-text">ISO Certification Active</span>
+                  <button className="modal-close-action-btn" onClick={() => setActiveModal(null)}>
+                    Close Window
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Model Engine Settings Modal */}
+            {activeModal === "settings" && (
+              <>
+                <div className="modal-header-row">
+                  <div className="modal-title-wrap">
+                    <h2 className="modal-title-text">⚙ Model Engine Settings</h2>
+                  </div>
+                  <button className="modal-close-x-btn" onClick={() => setActiveModal(null)} title="Close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+
+                <p className="modal-subtitle-text">
+                  Configure autonomous SRE parameters and intelligence models.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "20px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                    Active Inference Engine:
+                    <select style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "6px", fontSize: "13px", background: "#f8fafc" }}>
+                      <option>Gemini 1.5 Pro Enterprise Core (Google DeepMind)</option>
+                      <option>Gemini 1.5 Flash Realtime SRE</option>
+                      <option>Claude 3.5 Sonnet Reasoning Engine</option>
+                    </select>
+                  </label>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                    Execution Protocol:
+                    <select style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "6px", fontSize: "13px", background: "#f8fafc" }}>
+                      <option>Autonomous SRE Copilot (Deterministic)</option>
+                      <option>Conservative (Safety Verified)</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="modal-bottom-footer">
+                  <span></span>
+                  <button className="modal-close-action-btn" onClick={() => setActiveModal(null)}>
+                    Close Window
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

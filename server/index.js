@@ -1,109 +1,59 @@
-
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const { GoogleGenAI } = require("@google/genai");
+const path = require("path");
 
-dotenv.config({ path: "../.env" });
+// Load .env from server directory or project root
+dotenv.config({ path: path.join(__dirname, ".env") });
+dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
+// Middlewares
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "5mb" })); // Support large log pastes
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+// Route Modules
+const diagnosticsRouter = require("./routes/diagnostics");
+const telemetryRouter = require("./routes/telemetry");
+const incidentsRouter = require("./routes/incidents");
 
+// Mount Endpoints
+app.use("/api/diagnostics", diagnosticsRouter);
+app.use("/api/telemetry", telemetryRouter);
+app.use("/api/incidents", incidentsRouter);
+
+// Backwards compatibility endpoint for simple /api/analyze
+app.use("/api/analyze", diagnosticsRouter);
+
+// Health Check
 app.get("/api/health", (req, res) => {
+  const hasGeminiKey = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "");
   res.json({
-    success: true,
-    message: "OpsPilot AI backend is running",
+    status: "healthy",
+    service: "OpsPilot AI Backend Engine",
+    version: "4.5.0-Enterprise",
+    cloudModel: process.env.GEMINI_MODEL || "gemini-3.6-flash",
+    geminiKeyConfigured: hasGeminiKey,
+    mode: hasGeminiKey ? "cloud-active" : "simulation-active",
   });
 });
 
-app.post("/api/analyze", async (req, res) => {
-  try {
-    const { situation } = req.body;
-
-    if (!situation || !situation.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a situation to analyze.",
-      });
-    }
-
-    const prompt = `
-You are OpsPilot AI, a professional AI operations intelligence assistant.
-
-Analyze this operational situation:
-
-"${situation}"
-
-Return ONLY valid JSON.
-Do not use markdown.
-Do not use code fences.
-Do not add any text before or after the JSON.
-
-Use exactly this structure:
-
-{
-  "summary": "Short summary of the situation",
-  "riskLevel": "Low",
-  "priority": "Medium",
-  "possibleCause": "Most likely possible cause",
-  "actions": [
-    "First recommended action",
-    "Second recommended action",
-    "Third recommended action"
-  ]
-}
-
-Rules:
-- riskLevel must be exactly one of: Low, Medium, High, Critical
-- priority must be exactly one of: Low, Medium, High, Urgent
-- actions must contain 3 practical actions
-- Keep the response concise and professional
-- Do not invent specific measurements or facts that were not provided
-`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: prompt,
-    });
-
-    const text = response.text.trim();
-
-    let analysis;
-
-    try {
-      analysis = JSON.parse(text);
-    } catch (parseError) {
-      console.error("JSON PARSE ERROR:", parseError);
-      console.error("GEMINI RAW RESPONSE:", text);
-
-      return res.status(500).json({
-        success: false,
-        message: "AI returned an invalid analysis format.",
-      });
-    }
-
-    res.json({
-      success: true,
-      analysis,
-    });
-  } catch (error) {
-    console.error("GEMINI ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "AI analysis failed.",
-      error: error.message,
-    });
-  }
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error("[OpsPilot Unhandled Error]:", err);
+  res.status(500).json({
+    success: false,
+    message: "Internal Server Error in OpsPilot Engine",
+    error: err.message,
+  });
 });
 
 app.listen(PORT, () => {
-  console.log(`OpsPilot AI backend running on http://localhost:${PORT}`);
+  console.log(`=======================================================`);
+  console.log(`🚀 OpsPilot AI Server active on http://localhost:${PORT}`);
+  console.log(`⚡ Model: ${process.env.GEMINI_MODEL || "gemini-3.6-flash"}`);
+  console.log(`🛡 Mode: ${process.env.GEMINI_API_KEY ? "Google Cloud AI" : "Heuristic Simulation (Ready for Hackathon Demo)"}`);
+  console.log(`=======================================================`);
 });
