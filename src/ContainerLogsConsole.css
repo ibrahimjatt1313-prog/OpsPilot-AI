@@ -1,0 +1,27 @@
+/* Container Logs Console Custom Styles */
+.container-console-wrapper {
+  backdrop-filter: blur(12px);
+}
+
+/* Custom scrollbar for terminal logs */
+.container-console-wrapper::-webkit-scrollbar,
+.container-console-wrapper div::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.container-console-wrapper::-webkit-scrollbar-track,
+.container-console-wrapper div::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.container-console-wrapper::-webkit-scrollbar-thumb,
+.container-console-wrapper div::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 3px;
+}
+
+.container-console-wrapper::-webkit-scrollbar-thumb:hover,
+.container-console-wrapper div::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.8);
+}
