@@ -379,7 +379,7 @@ export default function App() {
           </div>
 
           <div className="user-profile-box">
-            <div className="user-profile-name">Alex Thorne</div>
+            <div className="user-profile-name">Muhammad Ibraheem Ashraf</div>
             <div className="user-profile-role">Lead Infrastructure</div>
           </div>
         </div>
