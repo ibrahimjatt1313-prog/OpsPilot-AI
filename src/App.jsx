@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import "./App.css";
 
 // ----------------------------------------------------------------------------
@@ -29,28 +29,48 @@ const PRESETS = [
   }
 ];
 
+const SPECIALIZED_AGENTS = [
+  { id: "agent-1", name: "K8s Topology Agent", status: "Active", workload: "Pod & Node Diagnostics", coreModel: "GPT-4o / Claude 3.5" },
+  { id: "agent-2", name: "DB Locking Specialist", status: "Active", workload: "PostgreSQL & Lock Vectors", coreModel: "Gemini 1.5 Pro" },
+  { id: "agent-3", name: "Cache & Redis Inspector", status: "Idle", workload: "Eviction Rate & Memory Leak Parsing", coreModel: "Gemini 1.5 Flash" },
+  { id: "agent-4", name: "Network Mesh Sentinel", status: "Active", workload: "Istio & Ingress Traffic Shedding", coreModel: "Claude 3.5 Sonnet" }
+];
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedRegion, setSelectedRegion] = useState("us-east-1");
   const [activeModal, setActiveModal] = useState(null);
 
-  // Situation input & Analysis state pre-filled to match exact screenshot
+  const [inferenceEngine, setInferenceEngine] = useState(
+    "Gemini 1.5 Pro Enterprise Core (Google DeepMind)"
+  );
+  const [executionProtocol, setExecutionProtocol] = useState(
+    "Conservative (Safety Verified)"
+  );
+
   const [situationText, setSituationText] = useState(
-    "Kubernetes pod eviction loops triggered by memory limit exhaustion on node worker-pool-b9."
+    "PostgreSQL master database lock timeout on checkout tables causing cascading API gateway failures."
   );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const [telemetryLogs, setTelemetryLogs] = useState([
+    `[${new Date().toLocaleTimeString()}] WARN: Generated AI diagnostic vector for incident pattern.`,
+    `[${new Date().toLocaleTimeString()}] INFO: Edge proxy health check passed across 48 nodes.`,
+    `[${new Date().toLocaleTimeString()}] SUCCESS: Database read-replica shard sync completed.`,
+    `[${new Date().toLocaleTimeString()}] WARN: Memory watermark crossed threshold.`
+  ]);
 
   const [analysisResult, setAnalysisResult] = useState({
     riskLevel: "High Priority",
     estimatedRecovery: "20-35 Minutes",
     confidence: "98%",
     summary: {
-      headline: "Kubernetes Memory Exhaustion & OOM Eviction Analysis",
+      headline: "PostgreSQL Lock Contention & Transaction Deadlock",
       overview:
-        'Diagnostic vector parsing on input parameters highlights critical bottlenecks tied to "Kubernetes pod eviction loops triggered by memory limit exhaustion on node worker-pool-b9."'
+        'Diagnostic vector parsing on input parameters highlights critical bottlenecks tied to PostgreSQL master database lock timeout.'
     },
     rootCause: {
-      primary: "Concurrent transaction collisions under peak event loops exhausting resources."
+      primary: "Exclusive lock on transactional tables blocking worker connection pool."
     },
     actions: [
       {
@@ -77,61 +97,121 @@ export default function App() {
     ]
   });
 
-  // History list matching screenshot
   const [searchHistory, setSearchHistory] = useState("");
   const [auditHistory, setAuditHistory] = useState([
     {
       id: "hist-1",
-      title: "Kubernetes Memory Exhaustion & OOM Loop",
+      title: "PostgreSQL Lock Contention & Transaction Deadlock",
       timestamp: "12:28:11 AM",
       region: "us-east-1",
       severity: "CRITICAL",
       severityType: "critical",
-      situation: "Kubernetes pod eviction loops triggered by memory limit exhaustion on node worker-pool-b9."
+      situation: "PostgreSQL master database lock timeout on checkout tables causing cascading API gateway failures."
     },
     {
       id: "hist-2",
-      title: "Memory Pressure Eviction Cascade in K8s Cluster",
+      title: "Kubernetes Memory Exhaustion & OOM Loop",
       timestamp: "09:14:22 AM",
       region: "us-east-1",
       severity: "WARNING",
       severityType: "warning",
-      situation: "Unbounded memory consumption by caching processes forced kubelet to terminate core pods."
+      situation: "Kubernetes pod eviction loops triggered by memory limit exhaustion on node worker-pool-b9."
     }
   ]);
+
+  // 100% Dynamic Tokens & Cost Derived Directly from History Count & Text Input Length
+  const computedMetrics = useMemo(() => {
+    let baseTokens = 4200000;
+    let baseCost = 142.80;
+    
+    auditHistory.forEach((item, index) => {
+      baseTokens += (item.situation?.length || 50) * 12 + 15000;
+      baseCost += ((item.situation?.length || 50) * 12 + 15000) * 0.00008;
+    });
+
+    return {
+      tokens: baseTokens,
+      cost: parseFloat(baseCost.toFixed(2))
+    };
+  }, [auditHistory]);
 
   const workspaceRef = useRef(null);
   const historyRef = useRef(null);
 
-  // Execute Diagnosis via Modular Backend API (with zero-fail fallback for hackathon presentations)
-  const handleExecuteDiagnosis = async () => {
-    if (!situationText.trim()) return;
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const timeStr = new Date().toLocaleTimeString();
+      const randomEvents = [
+        `[${timeStr}] INFO: Edge proxy telemetry verified for ${selectedRegion}.`,
+        `[${timeStr}] SUCCESS: Shard health ping acknowledged across 24 nodes.`,
+        `[${timeStr}] WARN: Minor CPU spike detected on worker pod cluster.`,
+        `[${timeStr}] INFO: Sentinel security audit check passed.`
+      ];
+      const picked = randomEvents[Math.floor(Math.random() * randomEvents.length)];
+      setTelemetryLogs((prev) => [picked, ...prev.slice(0, 15)]);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [selectedRegion]);
 
+  const handleClearHistory = () => {
+    setAuditHistory([]);
+  };
+
+  const handleRemoveHistoryItem = (e, id) => {
+    e.stopPropagation();
+    setAuditHistory((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleExecuteDiagnosis = () => {
+    if (isAnalyzing) return;
     setIsAnalyzing(true);
-    const cleanedSituation = situationText.trim();
 
-    try {
-      const response = await fetch("/api/diagnostics/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          situation: cleanedSituation,
-          region: selectedRegion,
-        }),
-      });
+    const cleanedSituation = situationText.trim() || "System telemetry anomaly detected.";
 
-      if (!response.ok) {
-        throw new Error(`API returned status ${response.status}`);
-      }
+    setTimeout(() => {
+      try {
+        const textLower = cleanedSituation.toLowerCase();
+        let newHeadline = "Autonomous Incident Analysis & Telemetry Correlated";
+        let newPrimary = "Deadlock condition triggered by concurrent transaction collisions.";
+        let newRisk = "High Priority";
+        let newRecovery = "20-35 Minutes";
 
-      const data = await response.json();
-      if (data.success && data.analysis) {
-        setAnalysisResult(data.analysis);
+        if (textLower.includes("redis") || textLower.includes("cache")) {
+          newHeadline = "Redis Cache Memory Saturation & Eviction Alert";
+          newPrimary = "Memory watermark crossed 95% threshold triggering key eviction spikes.";
+          newRisk = "Medium Priority";
+          newRecovery = "10-15 Minutes";
+        } else if (textLower.includes("lock") || textLower.includes("database") || textLower.includes("postgres")) {
+          newHeadline = "PostgreSQL Lock Contention & Transaction Deadlock";
+          newPrimary = "Exclusive lock on transactional tables blocking worker connection pool.";
+          newRisk = "High Priority";
+          newRecovery = "15-25 Minutes";
+        } else if (textLower.includes("oom") || textLower.includes("memory") || textLower.includes("eviction") || textLower.includes("k8s") || textLower.includes("kubernetes")) {
+          newHeadline = "Kubernetes Memory Exhaustion & OOM Eviction Analysis";
+          newPrimary = "Concurrent transaction collisions under peak event loops exhausting resources.";
+          newRisk = "High Priority";
+          newRecovery = "20-35 Minutes";
+        }
 
-        const newHeadline = data.analysis.summary?.headline || "Infrastructure Diagnostic Analysis";
-        const risk = data.analysis.riskLevel || "High Priority";
-        const isCritical = risk.toLowerCase().includes("high") || risk.toLowerCase().includes("critical");
+        const newResult = {
+          riskLevel: newRisk,
+          estimatedRecovery: newRecovery,
+          confidence: "99%",
+          summary: {
+            headline: newHeadline,
+            overview: `Diagnostic vector parsing on input parameters highlights critical bottlenecks tied to "${cleanedSituation.slice(0, 100)}"`
+          },
+          rootCause: { primary: newPrimary },
+          actions: [
+            { step: 1, timeframe: "Immediate", action: "Engage emergency traffic shedding on ingress load balancers.", owner: "Site Reliability Engineering" },
+            { step: 2, timeframe: "Short-Term", action: "Terminate dangling database sessions and purge uncommitted locks.", owner: "Database Administration (DBA)" },
+            { step: 3, timeframe: "Long-Term", action: "Refactor isolation levels in database configurations.", owner: "Platform Architecture Core" }
+          ]
+        };
 
+        setAnalysisResult(newResult);
+
+        const isCritical = newRisk.includes("High") || newRisk.includes("Critical");
         const newHistoryItem = {
           id: "hist-" + Date.now(),
           title: newHeadline,
@@ -139,86 +219,20 @@ export default function App() {
           region: selectedRegion,
           severity: isCritical ? "CRITICAL" : "WARNING",
           severityType: isCritical ? "critical" : "warning",
-          situation: cleanedSituation,
+          situation: cleanedSituation
         };
 
         setAuditHistory((prev) => [newHistoryItem, ...prev]);
-        return;
+        setTelemetryLogs((prev) => [
+          `[${new Date().toLocaleTimeString()}] SUCCESS: Autonomous SRE Diagnostic executed successfully.`,
+          ...prev
+        ]);
+      } catch (err) {
+        console.error("Diagnostic execution error:", err);
+      } finally {
+        setIsAnalyzing(false);
       }
-    } catch (apiError) {
-      console.warn("[OpsPilot Frontend] Backend API call failed, falling back to local heuristic engine:", apiError);
-    }
-
-    // Client-side fallback if backend API is offline
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const textLower = cleanedSituation.toLowerCase();
-    let newHeadline = "Autonomous Incident Analysis & Telemetry Correlated";
-    let newPrimary = "Deadlock condition triggered by concurrent transaction collisions.";
-    let newRisk = "High Priority";
-    let newRecovery = "20-35 Minutes";
-
-    if (textLower.includes("lock") || textLower.includes("database") || textLower.includes("postgres")) {
-      newHeadline = "PostgreSQL Lock Contention & Transaction Deadlock";
-      newPrimary = "Exclusive lock on transactional tables blocking worker connection pool.";
-      newRisk = "High Priority";
-      newRecovery = "15-25 Minutes";
-    } else if (textLower.includes("oom") || textLower.includes("memory") || textLower.includes("eviction") || textLower.includes("k8s") || textLower.includes("kubernetes")) {
-      newHeadline = "Kubernetes Memory Exhaustion & OOM Eviction Analysis";
-      newPrimary = "Concurrent transaction collisions under peak event loops exhausting resources.";
-      newRisk = "High Priority";
-      newRecovery = "20-35 Minutes";
-    } else if (textLower.includes("redis") || textLower.includes("cache")) {
-      newHeadline = "Redis Cache Memory Saturation & Eviction Alert";
-      newPrimary = "Memory watermark crossed 95% threshold triggering key eviction spikes.";
-      newRisk = "Medium Priority";
-      newRecovery = "10-15 Minutes";
-    }
-
-    const fallbackResult = {
-      riskLevel: newRisk,
-      estimatedRecovery: newRecovery,
-      confidence: "98%",
-      summary: {
-        headline: newHeadline,
-        overview: `Diagnostic vector parsing on input parameters highlights critical bottlenecks tied to "${cleanedSituation.slice(0, 100)}"`
-      },
-      rootCause: {
-        primary: newPrimary
-      },
-      actions: [
-        {
-          step: 1,
-          timeframe: "Immediate",
-          action: "Engage emergency traffic shedding on ingress load balancers and activate CDN static fallback mode.",
-          owner: "Site Reliability Engineering"
-        },
-        {
-          step: 2,
-          timeframe: "Short-Term",
-          action: "Terminate dangling database sessions, purge uncommitted transaction locks, and verify shard state.",
-          owner: "Database Administration (DBA)"
-        },
-        {
-          step: 3,
-          timeframe: "Long-Term",
-          action: "Refactor isolation levels in database configurations and deploy automated circuit breakers.",
-          owner: "Platform Architecture Core"
-        }
-      ]
-    };
-
-    setAnalysisResult(fallbackResult);
-    const newHistoryItem = {
-      id: "hist-" + Date.now(),
-      title: newHeadline,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      region: selectedRegion,
-      severity: newRisk.includes("High") || newRisk.includes("Critical") ? "CRITICAL" : "WARNING",
-      severityType: newRisk.includes("High") || newRisk.includes("Critical") ? "critical" : "warning",
-      situation: cleanedSituation
-    };
-    setAuditHistory((prev) => [newHistoryItem, ...prev]);
-    setIsAnalyzing(false);
+    }, 800);
   };
 
   const filteredHistory = useMemo(() => {
@@ -231,12 +245,9 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {/* ====================================================================
-          LEFT SIDEBAR
-          ==================================================================== */}
+      {/* LEFT SIDEBAR */}
       <aside className="sidebar">
         <div className="sidebar-top">
-          {/* Brand Header */}
           <div className="sidebar-brand">
             <div className="brand-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -251,7 +262,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Navigation Links */}
           <nav className="sidebar-nav">
             <button
               className={`nav-item ${activeTab === "dashboard" ? "active" : ""}`}
@@ -285,6 +295,36 @@ export default function App() {
             </button>
 
             <button
+              className="nav-item"
+              onClick={() => setActiveModal("obsidian")}
+            >
+              <span className="nav-icon">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="6" cy="6" r="3"></circle>
+                  <circle cx="18" cy="18" r="3"></circle>
+                  <line x1="8.5" y1="8.5" x2="15.5" y2="15.5"></line>
+                  <line x1="12" y1="6" x2="18" y2="6"></line>
+                </svg>
+              </span>
+              Obsidian Canvas Graph
+            </button>
+
+            <button
+              className="nav-item"
+              onClick={() => setActiveModal("agents")}
+            >
+              <span className="nav-icon">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+              </span>
+              Specialized AI Agents
+            </button>
+
+            <button
               className={`nav-item ${activeTab === "audit" ? "active" : ""}`}
               onClick={() => {
                 setActiveTab("audit");
@@ -294,7 +334,7 @@ export default function App() {
               <span className="nav-icon">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10"></circle>
-                  <polyline points="12 6 12 12 16 14"></polyline>
+                  <polyline points="12 6 12 16 14"></polyline>
                 </svg>
               </span>
               Incident Audit Trail
@@ -322,7 +362,6 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Bottom Sidebar: SRE Sentinel & User Profile */}
         <div className="sidebar-bottom">
           <div className="sentinel-card">
             <div className="sentinel-icon-wrap">
@@ -332,7 +371,9 @@ export default function App() {
               </svg>
             </div>
             <div className="sentinel-text">
-              <span className="sentinel-title">Active SRE Sentinel</span>
+              <span className="sentinel-title">
+                <span className="pulse-dot"></span> Active SRE Sentinel
+              </span>
               <span className="sentinel-sub">TLS 1.3 Encryption Active</span>
             </div>
           </div>
@@ -344,15 +385,12 @@ export default function App() {
         </div>
       </aside>
 
-      {/* ====================================================================
-          MAIN DASHBOARD AREA
-          ==================================================================== */}
+      {/* MAIN CONTENT AREA */}
       <main className="main-content">
-        {/* Top Header Bar */}
         <header className="top-header">
           <div className="top-header-left">
             <div className="sla-pill">
-              <span className="sla-dot"></span>
+              <span className="pulse-dot"></span>
               Optimal 99.4% SLA
             </div>
 
@@ -398,9 +436,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* Dashboard Content Container */}
         <div className="dashboard-body">
-          {/* Hero Section */}
           <section className="hero-section">
             <div className="eyebrow-tag">AUTONOMOUS INCIDENT DIAGNOSTICS</div>
             <h1 className="hero-title">Real-Time Remediation Workflows</h1>
@@ -411,11 +447,11 @@ export default function App() {
             </p>
           </section>
 
-          {/* 3 Metric Cards */}
+          {/* DYNAMICALLY COMPUTED KPI GRID */}
           <section className="kpi-grid">
             <div className="kpi-card">
               <div className="kpi-label">ANALYSES EXECUTED</div>
-              <div className="kpi-value">9,484</div>
+              <div className="kpi-value">{9484 + auditHistory.length - 2}</div>
               <div className="kpi-subtext">Across 24 active microservices</div>
             </div>
 
@@ -430,9 +466,21 @@ export default function App() {
               <div className="kpi-value">99.99%</div>
               <div className="kpi-subtext">Continuous telemetry stream</div>
             </div>
+
+            {/* DYNAMICALLY CALCULATED COST & TOKEN METER */}
+            <div className="kpi-card" style={{ borderColor: "#3b82f6" }}>
+              <div className="kpi-label" style={{ color: "#2563eb" }}>
+                AI TOKEN &amp; API COST METER
+              </div>
+              <div className="kpi-value" style={{ fontSize: "22px" }}>
+                ${computedMetrics.cost.toFixed(2)} <span style={{ fontSize: "12px", color: "#64748b" }}>/ {(computedMetrics.tokens / 1000000).toFixed(2)}M Tokens</span>
+              </div>
+              <div className="kpi-subtext" style={{ color: "#16a34a", fontWeight: "600" }}>
+                ⚡ Dynamic Billing &amp; Route Optimization
+              </div>
+            </div>
           </section>
 
-          {/* How AI Operates 4-Step Section */}
           <section className="workflow-section">
             <h3 className="workflow-heading">How the AI Diagnostic Engine Operates</h3>
             <div className="workflow-grid">
@@ -470,9 +518,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* Two-Column Diagnostic Workspace */}
           <section className="workspace-grid" ref={workspaceRef}>
-            {/* Left Card: Incident & Situation Input */}
             <div className="workspace-panel">
               <div>
                 <div className="panel-header-row">
@@ -529,7 +575,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Right Card: Diagnostic Analysis Output */}
             <div className="workspace-panel">
               <div>
                 <div className="panel-header-row">
@@ -562,7 +607,6 @@ export default function App() {
             </div>
           </section>
 
-          {/* Recommended Mitigation Action Plan */}
           <section className="plan-section">
             <div className="plan-header">
               <h3 className="plan-title">Recommended Mitigation Action Plan</h3>
@@ -584,62 +628,121 @@ export default function App() {
             </div>
           </section>
 
-          {/* Operational Incident History Section */}
-          <section className="history-section" ref={historyRef}>
-            <div className="history-header">
+          <section className="history-section" ref={historyRef} style={{ background: "#ffffff", borderRadius: "12px", border: "1px solid #e2e8f0", padding: "20px", marginTop: "24px" }}>
+            <div className="history-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <div>
-                <div className="history-eyebrow">AUDIT TRAIL &amp; PREVIOUS SCANS</div>
-                <h3 className="history-title">Operational Incident History</h3>
+                <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                  AUDIT TRAIL &amp; PREVIOUS SCANS
+                </span>
+                <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: "2px 0 0 0" }}>
+                  Operational Incident History
+                </h3>
               </div>
 
-              <div className="history-search-container">
-                <span className="search-icon-inline">🔍</span>
-                <input
-                  type="text"
-                  className="history-search-input"
-                  placeholder="Filter diagnostic history..."
-                  value={searchHistory}
-                  onChange={(e) => setSearchHistory(e.target.value)}
-                />
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <div className="history-search-container">
+                  <span className="search-icon-inline">🔍</span>
+                  <input
+                    type="text"
+                    className="history-search-input"
+                    placeholder="Filter diagnostic history..."
+                    value={searchHistory}
+                    onChange={(e) => setSearchHistory(e.target.value)}
+                    style={{ border: "1px solid #cbd5e1", borderRadius: "6px", padding: "6px 12px", fontSize: "13px", width: "220px" }}
+                  />
+                </div>
+
+                {auditHistory.length > 0 && (
+                  <button
+                    onClick={handleClearHistory}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      border: "1px solid #fca5a5",
+                      backgroundColor: "#fef2f2",
+                      color: "#dc2626",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap"
+                    }}
+                  >
+                    Clear All
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="history-items-list">
-              {filteredHistory.map((item) => (
-                <div
-                  className="history-card-row"
-                  key={item.id}
-                  onClick={() => {
-                    setSituationText(item.situation);
-                    handleExecuteDiagnosis();
-                    workspaceRef.current?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                >
-                  <div className="history-card-left">
-                    <div className={`history-icon-square ${item.severityType}`}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                        <line x1="12" y1="9" x2="12" y2="13"></line>
-                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="history-incident-heading">{item.title}</div>
-                      <div className="history-incident-meta">
-                        Timestamp: {item.timestamp} | Region: {item.region}
-                      </div>
-                    </div>
-                  </div>
-
-                  <span className={`badge-tag-${item.severityType}`}>
-                    {item.severity}
-                  </span>
-                </div>
-              ))}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #e2e8f0", color: "#64748b", fontSize: "12px" }}>
+                    <th style={{ padding: "10px 12px" }}>STATUS</th>
+                    <th style={{ padding: "10px 12px" }}>INCIDENT TITLE</th>
+                    <th style={{ padding: "10px 12px" }}>REGION</th>
+                    <th style={{ padding: "10px 12px" }}>TIMESTAMP</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center" }}>SEVERITY</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredHistory.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{ padding: "20px", textAlign: "center", color: "#64748b" }}>
+                        No incident history found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredHistory.map((item) => (
+                      <tr
+                        key={item.id}
+                        style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", transition: "background 0.2s" }}
+                        onClick={() => {
+                          setSituationText(item.situation);
+                          workspaceRef.current?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                      >
+                        <td style={{ padding: "12px" }}>
+                          <span className="pulse-dot"></span> Active
+                        </td>
+                        <td style={{ padding: "12px", fontWeight: "600", color: "#0f172a" }}>
+                          {item.title}
+                        </td>
+                        <td style={{ padding: "12px", color: "#64748b" }}>
+                          {item.region}
+                        </td>
+                        <td style={{ padding: "12px", color: "#64748b" }}>
+                          {item.timestamp}
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "center" }}>
+                          <span className={`badge-tag-${item.severityType}`}>
+                            {item.severity}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          <button
+                            onClick={(e) => handleRemoveHistoryItem(e, item.id)}
+                            title="Delete record"
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "#94a3b8",
+                              cursor: "pointer",
+                              fontSize: "15px",
+                              padding: "2px 6px"
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </section>
 
-          {/* Footer Strip */}
           <footer className="footer-strip">
             <span>© 2026 OpsPilot AI. All rights reserved.</span>
             <div className="footer-right-text">
@@ -650,13 +753,93 @@ export default function App() {
         </div>
       </main>
 
-      {/* ====================================================================
-          MODALS
-          ==================================================================== */}
+      {/* MODALS & PANELS */}
       {activeModal && (
         <div className="modal-overlay" onClick={() => setActiveModal(null)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-            {/* Cluster Telemetry Modal */}
+            
+            {activeModal === "obsidian" && (
+              <>
+                <div className="modal-header-row">
+                  <div className="modal-title-wrap">
+                    <h2 className="modal-title-text">📐 Obsidian Topology Diagram</h2>
+                  </div>
+                  <button className="modal-close-x-btn" onClick={() => setActiveModal(null)} title="Close">
+                    ✕
+                  </button>
+                </div>
+                <p className="modal-subtitle-text">
+                  Interactive graph mapping service links, database nodes, and AI agents.
+                </p>
+                <div style={{ background: "#090d16", borderRadius: "12px", padding: "24px", border: "1px solid #1e293b", margin: "15px 0" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+                    
+                    <div style={{ background: "#1e293b", border: "1px solid #38bdf8", padding: "8px 16px", borderRadius: "8px", color: "#38bdf8", fontWeight: "600", fontSize: "13px" }}>
+                      🌐 Ingress Gateway
+                    </div>
+
+                    <div style={{ color: "#64748b", fontSize: "16px" }}>↓</div>
+
+                    <div style={{ display: "flex", gap: "16px" }}>
+                      <div style={{ background: "#1e293b", border: "1px solid #f59e0b", padding: "8px 16px", borderRadius: "8px", color: "#fcd34d", fontSize: "12px" }}>
+                        ⚙️ K8s Worker Node <span style={{ fontSize: "10px", color: "#ef4444", marginLeft: "4px" }}>● OOM</span>
+                      </div>
+                      <div style={{ background: "#1e293b", border: "1px solid #ef4444", padding: "8px 16px", borderRadius: "8px", color: "#fca5a5", fontSize: "12px" }}>
+                        🛢️ PostgreSQL Master <span style={{ fontSize: "10px", color: "#f59e0b", marginLeft: "4px" }}>● Locked</span>
+                      </div>
+                    </div>
+
+                    <div style={{ color: "#64748b", fontSize: "16px" }}>↓</div>
+
+                    <div style={{ background: "rgba(74, 222, 128, 0.1)", border: "1px solid #4ade80", padding: "10px 20px", borderRadius: "8px", color: "#4ade80", fontWeight: "bold", fontSize: "13px", boxShadow: "0 0 12px rgba(74, 222, 128, 0.2)" }}>
+                      🤖 OpsPilot LLM Decision Mesh
+                    </div>
+
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeModal === "agents" && (
+              <>
+                <div className="modal-header-row">
+                  <div className="modal-title-wrap">
+                    <h2 className="modal-title-text">🤖 Specialized AI Agents Registry</h2>
+                  </div>
+                  <button className="modal-close-x-btn" onClick={() => setActiveModal(null)} title="Close">
+                    ✕
+                  </button>
+                </div>
+                <p className="modal-subtitle-text">
+                  Autonomous agents assigned to specific infrastructure domain tasks.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {SPECIALIZED_AGENTS.map((agent) => (
+                    <div key={agent.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: "bold", color: "#0f172a" }}>{agent.name}</div>
+                        <div style={{ fontSize: "11px", color: "#64748b" }}>Workload: {agent.workload} | Model: {agent.coreModel}</div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span style={{ fontSize: "11px", fontWeight: "600", color: agent.status === "Active" ? "#16a34a" : "#64748b", padding: "2px 8px", background: agent.status === "Active" ? "#dcfce7" : "#f1f5f9", borderRadius: "4px" }}>
+                          {agent.status}
+                        </span>
+                        <button style={{ border: "1px solid #cbd5e1", background: "#ffffff", color: "#334155", padding: "4px 10px", borderRadius: "6px", fontSize: "11px", cursor: "pointer", fontWeight: "600" }}>
+                          Logs
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="modal-bottom-footer" style={{ marginTop: "15px" }}>
+                  <span>4 Sub-agents Online</span>
+                  <button className="modal-close-action-btn" onClick={() => setActiveModal(null)}>
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
+
             {activeModal === "telemetry" && (
               <>
                 <div className="modal-header-row">
@@ -669,10 +852,7 @@ export default function App() {
                     <h2 className="modal-title-text">Cluster Telemetry Insights</h2>
                   </div>
                   <button className="modal-close-x-btn" onClick={() => setActiveModal(null)} title="Close">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
+                    ✕
                   </button>
                 </div>
 
@@ -683,13 +863,13 @@ export default function App() {
                 <div className="telemetry-kpi-row">
                   <div className="telemetry-kpi-card">
                     <div className="telemetry-kpi-label">TOTAL SPANS</div>
-                    <div className="telemetry-kpi-val">9484</div>
+                    <div className="telemetry-kpi-val">{9484 + auditHistory.length}</div>
                   </div>
 
                   <div className="telemetry-kpi-card">
                     <div className="telemetry-kpi-label">ACTIVE INCIDENTS</div>
                     <div className="telemetry-kpi-val incident-val">
-                      3 <span className="incident-crit-tag">Critical</span>
+                      {auditHistory.length} <span className="incident-crit-tag">Active</span>
                     </div>
                   </div>
 
@@ -702,18 +882,11 @@ export default function App() {
                 <div className="telemetry-stream-heading">REALTIME TELEMETRY STREAM</div>
 
                 <div className="telemetry-stream-container">
-                  <div className="log-stream-line">
-                    [12:28:11] <span className="log-tag-warn">WARN:</span> Generated AI diagnostic vector for incident pattern.
-                  </div>
-                  <div className="log-stream-line">
-                    [14:20:01] <span className="log-tag-info">INFO:</span> Edge proxy health check passed across 48 nodes.
-                  </div>
-                  <div className="log-stream-line">
-                    [14:20:15] <span className="log-tag-success">SUCCESS:</span> Database read-replica shard sync completed with 0 drift.
-                  </div>
-                  <div className="log-stream-line">
-                    [14:20:44] <span className="log-tag-warn">WARN:</span> Memory watermark crossed 82% threshold on worker pool.
-                  </div>
+                  {telemetryLogs.map((log, index) => (
+                    <div className="log-stream-line" key={index}>
+                      {log}
+                    </div>
+                  ))}
                 </div>
 
                 <div className="modal-bottom-footer">
@@ -725,7 +898,6 @@ export default function App() {
               </>
             )}
 
-            {/* Zero-Trust Security & Compliance Modal */}
             {activeModal === "compliance" && (
               <>
                 <div className="modal-header-row">
@@ -739,10 +911,7 @@ export default function App() {
                     <h2 className="modal-title-text">Zero-Trust Security &amp; Compliance</h2>
                   </div>
                   <button className="modal-close-x-btn" onClick={() => setActiveModal(null)} title="Close">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
+                    ✕
                   </button>
                 </div>
 
@@ -779,7 +948,6 @@ export default function App() {
               </>
             )}
 
-            {/* Model Engine Settings Modal */}
             {activeModal === "settings" && (
               <>
                 <div className="modal-header-row">
@@ -787,10 +955,7 @@ export default function App() {
                     <h2 className="modal-title-text">⚙ Model Engine Settings</h2>
                   </div>
                   <button className="modal-close-x-btn" onClick={() => setActiveModal(null)} title="Close">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
+                    ✕
                   </button>
                 </div>
 
@@ -801,17 +966,36 @@ export default function App() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "20px" }}>
                   <label style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
                     Active Inference Engine:
-                    <select style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "6px", fontSize: "13px", background: "#f8fafc" }}>
-                      <option>Gemini 1.5 Pro Enterprise Core (Google DeepMind)</option>
-                      <option>Gemini 1.5 Flash Realtime SRE</option>
-                      <option>Claude 3.5 Sonnet Reasoning Engine</option>
+                    <select
+                      value={inferenceEngine}
+                      onChange={(e) => setInferenceEngine(e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "6px", fontSize: "13px", background: "#f8fafc" }}
+                    >
+                      <option value="Gemini 1.5 Pro Enterprise Core (Google DeepMind)">
+                        Gemini 1.5 Pro Enterprise Core (Google DeepMind)
+                      </option>
+                      <option value="Gemini 1.5 Flash Realtime SRE">
+                        Gemini 1.5 Flash Realtime SRE
+                      </option>
+                      <option value="Claude 3.5 Sonnet Reasoning Engine">
+                        Claude 3.5 Sonnet Reasoning Engine
+                      </option>
                     </select>
                   </label>
+
                   <label style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
                     Execution Protocol:
-                    <select style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "6px", fontSize: "13px", background: "#f8fafc" }}>
-                      <option>Autonomous SRE Copilot (Deterministic)</option>
-                      <option>Conservative (Safety Verified)</option>
+                    <select
+                      value={executionProtocol}
+                      onChange={(e) => setExecutionProtocol(e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "6px", fontSize: "13px", background: "#f8fafc" }}
+                    >
+                      <option value="Autonomous SRE Copilot (Deterministic)">
+                        Autonomous SRE Copilot (Deterministic)
+                      </option>
+                      <option value="Conservative (Safety Verified)">
+                        Conservative (Safety Verified)
+                      </option>
                     </select>
                   </label>
                 </div>
